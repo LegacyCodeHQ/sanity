@@ -139,3 +139,91 @@ func toAbsolutePaths(repoRoot string, relativePaths []string) []string {
 	}
 	return absolutePaths
 }
+
+// GetCommitDartFiles finds all .dart files that were changed in a specific commit.
+// Returns absolute paths to all .dart files added, modified, or renamed in the commit.
+func GetCommitDartFiles(repoPath, commitID string) ([]string, error) {
+	// Validate the repository path exists
+	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("repository path does not exist: %s", repoPath)
+	}
+
+	// Verify it's a git repository
+	if !isGitRepository(repoPath) {
+		return nil, fmt.Errorf("%s is not a git repository (use 'git init' to initialize)", repoPath)
+	}
+
+	// Validate the commit exists
+	if err := validateCommit(repoPath, commitID); err != nil {
+		return nil, err
+	}
+
+	// Get the repository root
+	repoRoot, err := getRepositoryRoot(repoPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get repository root: %w", err)
+	}
+
+	// Get files changed in the commit
+	commitFiles, err := getCommitFiles(repoPath, commitID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get files from commit: %w", err)
+	}
+
+	// Filter for .dart files
+	dartFiles := filterDartFiles(commitFiles)
+
+	// Convert to absolute paths
+	absolutePaths := toAbsolutePaths(repoRoot, dartFiles)
+
+	return absolutePaths, nil
+}
+
+// validateCommit checks if the given commit reference exists in the repository
+func validateCommit(repoPath, commitID string) error {
+	cmd := exec.Command("git", "rev-parse", "--verify", commitID+"^{commit}")
+	cmd.Dir = repoPath
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return fmt.Errorf("invalid commit reference '%s': %s", commitID, strings.TrimSpace(stderr.String()))
+		}
+		return fmt.Errorf("invalid commit reference '%s'", commitID)
+	}
+
+	return nil
+}
+
+// getCommitFiles returns a list of all files changed in the specified commit (relative to repo root)
+func getCommitFiles(repoPath, commitID string) ([]string, error) {
+	// Use --root flag to handle root commits (first commit in repo)
+	cmd := exec.Command("git", "diff-tree", "--no-commit-id", "--name-only", "-r", "--root", commitID)
+	cmd.Dir = repoPath
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return nil, fmt.Errorf("git command failed: %s", stderr.String())
+		}
+		return nil, err
+	}
+
+	// Parse the output - one file per line
+	var files []string
+	lines := strings.Split(stdout.String(), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			files = append(files, line)
+		}
+	}
+
+	return files, nil
+}

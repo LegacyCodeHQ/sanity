@@ -1,9 +1,11 @@
 package git
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -53,6 +55,22 @@ func gitCommit(t *testing.T, repoDir, message string) {
 	cmd := exec.Command("git", "commit", "-m", message)
 	cmd.Dir = repoDir
 	require.NoError(t, cmd.Run(), "failed to git commit")
+}
+
+// Helper function to commit files and return the commit SHA
+func gitCommitAndGetSHA(t *testing.T, repoDir, message string) string {
+	// Commit the files
+	gitCommit(t, repoDir, message)
+
+	// Get the commit SHA
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = repoDir
+
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	require.NoError(t, cmd.Run(), "failed to get commit SHA")
+
+	return strings.TrimSpace(stdout.String())
 }
 
 // Helper function to modify a file
@@ -264,4 +282,168 @@ func TestToAbsolutePaths(t *testing.T) {
 	assert.Equal(t, "/Users/test/repo/lib/main.dart", absolutePaths[0])
 	assert.Equal(t, "/Users/test/repo/test/widget_test.dart", absolutePaths[1])
 	assert.Equal(t, "/Users/test/repo/models/user.dart", absolutePaths[2])
+}
+
+// Tests for GetCommitDartFiles
+
+func TestGetCommitDartFiles_SingleCommit(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupGitRepo(t, tmpDir)
+
+	// Create and commit .dart file
+	dartFile := createDartFile(t, tmpDir, "test.dart")
+	gitAdd(t, tmpDir, "test.dart")
+	commitID := gitCommitAndGetSHA(t, tmpDir, "Add test.dart")
+
+	// Get files from commit
+	files, err := GetCommitDartFiles(tmpDir, commitID)
+
+	require.NoError(t, err)
+	assert.Len(t, files, 1)
+	resolved, _ := filepath.EvalSymlinks(dartFile)
+	assert.Contains(t, files, resolved)
+}
+
+func TestGetCommitDartFiles_MultipleFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupGitRepo(t, tmpDir)
+
+	// Create and commit multiple .dart files
+	dartFile1 := createDartFile(t, tmpDir, "test1.dart")
+	dartFile2 := createDartFile(t, tmpDir, "test2.dart")
+	dartFile3 := createDartFile(t, tmpDir, "test3.dart")
+	gitAdd(t, tmpDir, "test1.dart")
+	gitAdd(t, tmpDir, "test2.dart")
+	gitAdd(t, tmpDir, "test3.dart")
+	commitID := gitCommitAndGetSHA(t, tmpDir, "Add multiple dart files")
+
+	// Get files from commit
+	files, err := GetCommitDartFiles(tmpDir, commitID)
+
+	require.NoError(t, err)
+	assert.Len(t, files, 3)
+	resolved1, _ := filepath.EvalSymlinks(dartFile1)
+	resolved2, _ := filepath.EvalSymlinks(dartFile2)
+	resolved3, _ := filepath.EvalSymlinks(dartFile3)
+	assert.Contains(t, files, resolved1)
+	assert.Contains(t, files, resolved2)
+	assert.Contains(t, files, resolved3)
+}
+
+func TestGetCommitDartFiles_FiltersDartOnly(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupGitRepo(t, tmpDir)
+
+	// Create and commit various file types
+	dartFile := createDartFile(t, tmpDir, "test.dart")
+	createFile(t, tmpDir, "test.go", "package main")
+	createFile(t, tmpDir, "README.md", "# Test")
+
+	gitAdd(t, tmpDir, "test.dart")
+	gitAdd(t, tmpDir, "test.go")
+	gitAdd(t, tmpDir, "README.md")
+	commitID := gitCommitAndGetSHA(t, tmpDir, "Add mixed files")
+
+	// Get files from commit
+	files, err := GetCommitDartFiles(tmpDir, commitID)
+
+	require.NoError(t, err)
+	assert.Len(t, files, 1, "should only include .dart files")
+	resolved, _ := filepath.EvalSymlinks(dartFile)
+	assert.Contains(t, files, resolved)
+}
+
+func TestGetCommitDartFiles_NoDartFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupGitRepo(t, tmpDir)
+
+	// Create and commit non-.dart files
+	createFile(t, tmpDir, "test.go", "package main")
+	gitAdd(t, tmpDir, "test.go")
+	commitID := gitCommitAndGetSHA(t, tmpDir, "Add go file")
+
+	// Get files from commit
+	files, err := GetCommitDartFiles(tmpDir, commitID)
+
+	require.NoError(t, err)
+	assert.Empty(t, files)
+}
+
+func TestGetCommitDartFiles_InvalidCommit(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupGitRepo(t, tmpDir)
+
+	// Create an initial commit
+	createDartFile(t, tmpDir, "test.dart")
+	gitAdd(t, tmpDir, "test.dart")
+	gitCommit(t, tmpDir, "Initial commit")
+
+	// Try to get files from invalid commit
+	_, err := GetCommitDartFiles(tmpDir, "invalid-commit-sha")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid commit reference")
+}
+
+func TestGetCommitDartFiles_HeadReference(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupGitRepo(t, tmpDir)
+
+	// Create first commit
+	createDartFile(t, tmpDir, "first.dart")
+	gitAdd(t, tmpDir, "first.dart")
+	gitCommit(t, tmpDir, "First commit")
+
+	// Create second commit with HEAD test
+	dartFile := createDartFile(t, tmpDir, "test.dart")
+	gitAdd(t, tmpDir, "test.dart")
+	gitCommit(t, tmpDir, "Add test.dart")
+
+	// Get files from HEAD
+	files, err := GetCommitDartFiles(tmpDir, "HEAD")
+
+	require.NoError(t, err)
+	assert.Len(t, files, 1)
+	resolved, _ := filepath.EvalSymlinks(dartFile)
+	assert.Contains(t, files, resolved)
+}
+
+func TestGetCommitDartFiles_HeadTildeReference(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupGitRepo(t, tmpDir)
+
+	// Create first commit
+	dartFile1 := createDartFile(t, tmpDir, "first.dart")
+	gitAdd(t, tmpDir, "first.dart")
+	gitCommit(t, tmpDir, "First commit")
+
+	// Create second commit
+	createDartFile(t, tmpDir, "second.dart")
+	gitAdd(t, tmpDir, "second.dart")
+	gitCommit(t, tmpDir, "Second commit")
+
+	// Get files from HEAD~1 (first commit)
+	files, err := GetCommitDartFiles(tmpDir, "HEAD~1")
+
+	require.NoError(t, err)
+	assert.Len(t, files, 1)
+	resolved, _ := filepath.EvalSymlinks(dartFile1)
+	assert.Contains(t, files, resolved)
+}
+
+func TestGetCommitDartFiles_NotGitRepo(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Don't initialize git
+
+	_, err := GetCommitDartFiles(tmpDir, "HEAD")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not a git repository")
+}
+
+func TestGetCommitDartFiles_InvalidPath(t *testing.T) {
+	_, err := GetCommitDartFiles("/nonexistent/path", "HEAD")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "does not exist")
 }

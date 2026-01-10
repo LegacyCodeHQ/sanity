@@ -11,6 +11,7 @@ import (
 
 var outputFormat string
 var repoPath string
+var commitID string
 
 // graphCmd represents the graph command
 var graphCmd = &cobra.Command{
@@ -19,9 +20,10 @@ var graphCmd = &cobra.Command{
 	Long: `Analyzes Dart files and generates a dependency graph showing relationships
 between project files (excluding external package: and dart: imports).
 
-Supports two modes:
+Supports three modes:
   1. Explicit files: Analyze specific files
-  2. Git mode: Analyze all uncommitted .dart files in a repository
+  2. Uncommitted files: Analyze all uncommitted .dart files (--repo)
+  3. Commit analysis: Analyze .dart files changed in a commit (--repo --commit)
 
 Output formats:
   - list: Simple text list (default)
@@ -31,8 +33,9 @@ Output formats:
 Example usage:
   sanity graph file1.dart file2.dart file3.dart
   sanity graph --repo .
-  sanity graph --repo /path/to/repo --format=json
-  sanity graph lib/**/*.dart --format=dot > deps.dot`,
+  sanity graph --repo . --commit abc123
+  sanity graph --repo . --commit HEAD~1 --format=json
+  sanity graph --repo /path/to/repo --commit main --format=dot`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var filePaths []string
 		var err error
@@ -43,16 +46,33 @@ Example usage:
 				return fmt.Errorf("cannot use --repo flag with explicit file arguments")
 			}
 
-			// Git discovery mode
-			filePaths, err = git.GetUncommittedDartFiles(repoPath)
-			if err != nil {
-				return fmt.Errorf("failed to get uncommitted files: %w", err)
-			}
+			if commitID != "" {
+				// Commit analysis mode
+				filePaths, err = git.GetCommitDartFiles(repoPath, commitID)
+				if err != nil {
+					return fmt.Errorf("failed to get files from commit: %w", err)
+				}
 
-			if len(filePaths) == 0 {
-				return fmt.Errorf("no uncommitted Dart files found in repository")
+				if len(filePaths) == 0 {
+					return fmt.Errorf("no Dart files changed in commit %s", commitID)
+				}
+			} else {
+				// Uncommitted files mode
+				filePaths, err = git.GetUncommittedDartFiles(repoPath)
+				if err != nil {
+					return fmt.Errorf("failed to get uncommitted files: %w", err)
+				}
+
+				if len(filePaths) == 0 {
+					return fmt.Errorf("no uncommitted Dart files found in repository")
+				}
 			}
 		} else {
+			// Validate --commit requires --repo
+			if commitID != "" {
+				return fmt.Errorf("--commit flag requires --repo to specify repository path")
+			}
+
 			// Explicit file mode
 			if len(args) == 0 {
 				return fmt.Errorf("no files specified (use --repo or provide file paths)")
@@ -94,4 +114,6 @@ func init() {
 	graphCmd.Flags().StringVarP(&outputFormat, "format", "f", "list", "Output format (list, json, dot)")
 	// Add repo flag
 	graphCmd.Flags().StringVarP(&repoPath, "repo", "r", "", "Git repository path to analyze uncommitted files")
+	// Add commit flag
+	graphCmd.Flags().StringVarP(&commitID, "commit", "c", "", "Git commit to analyze (requires --repo)")
 }
