@@ -9,7 +9,6 @@ permissions:
   contents: write
 
 jobs:
-  # Build binaries natively on each platform (required for CGO)
   build:
     name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
     runs-on: ${{ matrix.os }}
@@ -20,16 +19,16 @@ jobs:
           - os: ubuntu-latest
             goos: linux
             goarch: amd64
-          # Note: Linux ARM64 removed due to CGO cross-compilation complexity
-          # Users on ARM64 Linux can build from source with: make build-local
 
           # macOS builds
           - os: macos-13  # Intel
             goos: darwin
             goarch: amd64
+
           - os: macos-latest  # Apple Silicon (M1)
             goos: darwin
             goarch: arm64
+
           # Windows builds
           - os: windows-latest
             goos: windows
