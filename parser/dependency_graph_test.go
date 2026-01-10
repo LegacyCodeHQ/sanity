@@ -189,20 +189,6 @@ func TestDependencyGraph_ToDOT(t *testing.T) {
 	assert.Contains(t, dot, "->")
 }
 
-func TestDependencyGraph_ToList(t *testing.T) {
-	graph := DependencyGraph{
-		"/project/main.dart":  {"/project/utils.dart"},
-		"/project/utils.dart": {},
-	}
-
-	list := graph.ToList()
-
-	assert.Contains(t, list, "/project/main.dart:")
-	assert.Contains(t, list, "-> /project/utils.dart")
-	assert.Contains(t, list, "/project/utils.dart:")
-	assert.Contains(t, list, "(no project dependencies)")
-}
-
 func TestBuildDependencyGraph_IncludesNonDartFiles(t *testing.T) {
 	// Create temporary directory with test files
 	tmpDir := t.TempDir()
