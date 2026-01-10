@@ -1,4 +1,11 @@
-.PHONY: test test-coverage coverage coverage-html clean help
+.PHONY: test test-coverage coverage coverage-html clean help build build-version
+
+# Version information (can be overridden via command line)
+# Try to get version from git tag, otherwise use "dev"
+GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null || git describe --tags 2>/dev/null || echo "")
+VERSION ?= $(if $(GIT_TAG),$(GIT_TAG),dev)
+BUILD_DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
 # Default target
 help:
@@ -7,7 +14,9 @@ help:
 	@echo "  test-coverage - Run tests with coverage percentage"
 	@echo "  coverage      - Generate coverage profile (coverage.out)"
 	@echo "  coverage-html - Generate HTML coverage report (coverage.html)"
-	@echo "  clean         - Remove coverage files"
+	@echo "  build         - Build the binary (default version: dev)"
+	@echo "  build-version - Build the binary with version info from git"
+	@echo "  clean         - Remove coverage files and binary"
 
 # Run all tests
 test:
@@ -37,6 +46,15 @@ coverage-html: coverage
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
-# Clean coverage files
+# Build the binary (default version)
+build:
+	go build -o sanity ./main.go
+
+# Build the binary with version information from git
+build-version:
+	@echo "Building with version: $(VERSION), commit: $(COMMIT), date: $(BUILD_DATE)"
+	go build -ldflags "-X sanity/cmd.version=$(VERSION) -X sanity/cmd.buildDate=$(BUILD_DATE) -X sanity/cmd.commit=$(COMMIT)" -o sanity ./main.go
+
+# Clean coverage files and binary
 clean:
-	rm -f coverage.out coverage.html coverage.tmp *.coverprofile *.cover
+	rm -f coverage.out coverage.html coverage.tmp *.coverprofile *.cover sanity

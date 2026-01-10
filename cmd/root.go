@@ -6,6 +6,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// version is set via build-time ldflags
+var version = "dev"
+
+// buildDate is set via build-time ldflags
+var buildDate = "unknown"
+
+// commit is set via build-time ldflags
+var commit = "unknown"
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "sanity",
@@ -16,9 +25,7 @@ between project files while excluding external dependencies.
 
 Use 'sanity --help' to see all available commands, or 'sanity <command> --help'
 for detailed information about a specific command.`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+	Version: version,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -33,6 +40,22 @@ func Execute() {
 func init() {
 	// Register subcommands
 	rootCmd.AddCommand(graphCmd)
+
+	// Initialize annotations for version template
+	if rootCmd.Annotations == nil {
+		rootCmd.Annotations = make(map[string]string)
+	}
+	rootCmd.Annotations["buildDate"] = buildDate
+	rootCmd.Annotations["commit"] = commit
+
+	// Update version field dynamically (in case it was set via ldflags)
+	rootCmd.Version = version
+
+	// Customize version template to show additional build info
+	rootCmd.SetVersionTemplate(`{{with .Name}}{{printf "%s " .}}{{end}}{{printf "version %s" .Version}}
+Build date: {{printf "%s" (index .Annotations "buildDate")}}
+Commit: {{printf "%s" (index .Annotations "commit")}}
+`)
 
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
