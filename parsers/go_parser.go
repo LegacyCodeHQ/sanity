@@ -1,4 +1,4 @@
-package parser
+package parsers
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/smacker/go-tree-sitter/golang"
 	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/smacker/go-tree-sitter/golang"
 )
 
 // GoImport represents an import in a Go file

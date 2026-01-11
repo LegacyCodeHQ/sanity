@@ -1,4 +1,4 @@
-package parser
+package parsers
 
 import (
 	"os"
@@ -83,7 +83,7 @@ package main
 
 import (
 	"fmt"
-	"sanity/parser"
+	"sanity/parsers"
 	"sanity/cmd"
 )
 
@@ -95,7 +95,7 @@ func main() {}
 	assert.Len(t, imports, 3)
 
 	assert.Contains(t, imports, StandardLibraryImport{"fmt"})
-	assert.Contains(t, imports, InternalImport{"sanity/parser"})
+	assert.Contains(t, imports, InternalImport{"sanity/parsers"})
 	assert.Contains(t, imports, InternalImport{"sanity/cmd"})
 }
 
@@ -229,7 +229,7 @@ import (
 	"github.com/smacker/go-tree-sitter"
 	"github.com/spf13/cobra"
 
-	"sanity/parser"
+	"sanity/parsers"
 	"sanity/cmd"
 )
 
@@ -253,7 +253,7 @@ func main() {
 	assert.Contains(t, imports, ExternalImport{"github.com/spf13/cobra"})
 
 	// Internal imports
-	assert.Contains(t, imports, InternalImport{"sanity/parser"})
+	assert.Contains(t, imports, InternalImport{"sanity/parsers"})
 	assert.Contains(t, imports, InternalImport{"sanity/cmd"})
 }
 

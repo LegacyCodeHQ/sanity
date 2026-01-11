@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"sanity/git"
-	"sanity/parser"
+	"sanity/parsers"
 
 	"github.com/spf13/cobra"
 )
@@ -85,7 +85,7 @@ Example usage:
 		}
 
 		// Build the dependency graph
-		graph, err := parser.BuildDependencyGraph(filePaths)
+		graph, err := parsers.BuildDependencyGraph(filePaths)
 		if err != nil {
 			return fmt.Errorf("failed to build dependency graph: %w", err)
 		}
