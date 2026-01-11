@@ -25,8 +25,8 @@ while non-Dart files appear as standalone nodes with no connections.
 
 Supports three modes:
   1. Explicit files: Analyze specific files
-  2. Uncommitted files: Analyze all uncommitted files (--repo)
-  3. Commit analysis: Analyze files changed in a commit (--repo --commit)
+  2. Uncommitted files: Analyze all uncommitted files (default: current directory)
+  3. Commit analysis: Analyze files changed in a commit (--commit)
 
 Output formats:
   - dot: Graphviz DOT format for visualization (default)
@@ -34,13 +34,18 @@ Output formats:
 
 Example usage:
   sanity graph file1.dart file2.dart file3.dart
-  sanity graph --repo .
-  sanity graph --repo . --commit abc123
-  sanity graph --repo . --commit HEAD~1 --format=json
-  sanity graph --repo /path/to/repo --commit main --format=dot`,
+  sanity graph
+  sanity graph --commit 8d4f78
+  sanity graph --commit 8d4f78 --format=json
+  sanity graph --repo /path/to/repo --commit 8d4f78 --format=dot`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var filePaths []string
 		var err error
+
+		// If no explicit files provided and no repo path specified, default to current directory
+		if len(args) == 0 && repoPath == "" {
+			repoPath = "."
+		}
 
 		if repoPath != "" {
 			// Ensure --repo and explicit files are not both provided
@@ -70,15 +75,12 @@ Example usage:
 				}
 			}
 		} else {
-			// Validate --commit requires --repo
+			// Validate --commit cannot be used with explicit files
 			if commitID != "" {
-				return fmt.Errorf("--commit flag requires --repo to specify repository path")
+				return fmt.Errorf("--commit flag cannot be used with explicit file arguments")
 			}
 
 			// Explicit file mode
-			if len(args) == 0 {
-				return fmt.Errorf("no files specified (use --repo or provide file paths)")
-			}
 			filePaths = args
 		}
 
@@ -112,7 +114,7 @@ func init() {
 	// Add format flag
 	graphCmd.Flags().StringVarP(&outputFormat, "format", "f", "dot", "Output format (dot, json)")
 	// Add repo flag
-	graphCmd.Flags().StringVarP(&repoPath, "repo", "r", "", "Git repository path to analyze uncommitted files")
+	graphCmd.Flags().StringVarP(&repoPath, "repo", "r", "", "Git repository path (default: current directory)")
 	// Add commit flag
-	graphCmd.Flags().StringVarP(&commitID, "commit", "c", "", "Git commit to analyze (requires --repo)")
+	graphCmd.Flags().StringVarP(&commitID, "commit", "c", "", "Git commit to analyze")
 }

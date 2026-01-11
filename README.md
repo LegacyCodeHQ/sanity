@@ -20,23 +20,23 @@ Generate dependency graphs for Dart and Go files.
 
 **Flags**:
 
-| Flag           | Description                                      | Notes             |
-|----------------|--------------------------------------------------|-------------------|
-| `--repo, -r`   | Git repository path to analyze uncommitted files |                   |
-| `--commit, -c` | Git commit to analyze                            | Requires `--repo` |
-| `--format, -f` | Output format (dot, json)                        | Default: "dot"    |
+| Flag           | Description               | Notes          |
+|----------------|---------------------------|----------------|
+| `--repo, -r`   | Git repository path       | Default: "."   |
+| `--commit, -c` | Git commit to analyze     |                |
+| `--format, -f` | Output format (dot, json) | Default: "dot" |
 
 **Examples**:
 
 ```bash
 # Analyze uncommitted files in current repository (most common use case)
-sanity graph --repo .
+sanity graph
 
 # Output dependency graph in JSON format
-sanity graph --repo . --format=json
+sanity graph --format=json
 
 # Analyze files changed in a specific commit
-sanity graph --repo . --commit 8d4f78
+sanity graph --commit 8d4f78
 
 # Analyze uncommitted files in a different repository
 sanity graph --repo /path/to/repo
