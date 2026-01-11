@@ -1,10 +1,14 @@
-# Sanity
+# Sanity (experimental)
 
 [![License](https://img.shields.io/github/license/LegacyCodeHQ/sanity)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/LegacyCodeHQ/sanity)](https://github.com/LegacyCodeHQ/sanity/releases)
 
-Sanity is a CLI tool for analyzing and visualizing dependency graphs in your codebase, with support for Dart and Go
-files.
+Sanity helps you assess risk and confidently review code you didn't write—from AI agents or teammates.
+
+## Supported Languages
+
+- Dart
+- Go
 
 ## Usage
 
