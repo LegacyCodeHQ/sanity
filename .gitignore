@@ -1,4 +1,6 @@
+# IDEs
 .idea/
+.vscode/
 
 # application binary
 sanity
