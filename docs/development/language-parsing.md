@@ -1,21 +1,25 @@
 # Language Parsing
 
-The project uses the [go-tree-sitter](https://github.com/smacker/go-tree-sitter) bindings to integrate [tree-sitter](https://tree-sitter.github.io/tree-sitter/) for parsing and extracting dependency information from source files.
+The project uses [go-tree-sitter](https://github.com/smacker/go-tree-sitter) to integrate [tree-sitter](https://tree-sitter.github.io/tree-sitter/) for parsing and extracting dependency information from source files.
 
 ## Available Languages
 
-go-tree-sitter provides built-in support for parsing various programming languages, with each language binding in its own directory within the [project's source](https://github.com/smacker/go-tree-sitter).
+**go-tree-sitter** provides built-in support for parsing various programming languages, with each language binding in its own directory within the [project's source](https://github.com/smacker/go-tree-sitter).
 
 ## Unsupported Languages
 
 ### Dart
 
-Dart support is not available in go-tree-sitter. To add support for Dart:
+Dart support is not available natively in go-tree-sitter. To add support for Dart:
 
 1. The [tree-sitter-dart](https://github.com/UserNobody14/tree-sitter-dart) repository was cloned and the parser was built using the [tree-sitter-cli](https://github.com/tree-sitter/tree-sitter/blob/master/crates/cli/README.md) tool.
-2. The parser files (`parser.c`, `parser.h`, `scanner.c`) were copied into `tree_sitter_dart/`
-3. Go bindings were created to interface with the C-based tree-sitter parser using CGo
-4. The `tree_sitter_dart/` directory was marked as vendored code to exclude it from language statistics and code analysis
+2. The parser files (`parser.c`, `parser.h`, `scanner.c`) were copied into the `tree_sitter_external/dart/` directory.
+3. Go bindings were created inside the same directory to interface with the C-based tree-sitter parser using CGo.
+
+### Supporting Additional Languages
+
+1. Create a new language directory under `tree_sitter_external/` and build and copy the appropriate tree-sitter files.
+2. Check the `tree_sitter_external/dart` directory for a reference implementation of the Go bindings.
 
 ## Resources
 

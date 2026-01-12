@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/LegacyCodeHQ/sanity/tree_sitter_dart"
+	"github.com/LegacyCodeHQ/sanity/tree_sitter_external/dart"
 
 	sitter "github.com/smacker/go-tree-sitter"
 )
@@ -52,7 +52,7 @@ func Imports(filePath string) ([]Import, error) {
 }
 
 func ParseImports(sourceCode []byte) ([]Import, error) {
-	lang := tree_sitter_dart.GetLanguage()
+	lang := dart.GetLanguage()
 
 	parser := sitter.NewParser()
 	parser.SetLanguage(lang)
@@ -97,7 +97,7 @@ var fallbackQueryPatterns = []string{
 
 // queryImports executes a tree-sitter query and extracts import URIs
 func queryImports(rootNode *sitter.Node, sourceCode []byte, pattern string) ([]Import, error) {
-	lang := tree_sitter_dart.GetLanguage()
+	lang := dart.GetLanguage()
 
 	query, err := sitter.NewQuery([]byte(pattern), lang)
 	if err != nil {

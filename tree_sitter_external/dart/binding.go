@@ -1,4 +1,4 @@
-package tree_sitter_dart
+package dart
 
 //#cgo CFLAGS: -std=c11 -fPIC
 //#include "parser.h"
