@@ -96,6 +96,28 @@ Example usage:
 			return fmt.Errorf("failed to build dependency graph: %w", err)
 		}
 
+		// Build label with commit hash and dirty status for DOT format
+		var label string
+		if outputFormat == "dot" {
+			// Determine the repo path to use (use current directory if not specified)
+			labelRepoPath := repoPath
+			if labelRepoPath == "" {
+				labelRepoPath = "."
+			}
+
+			// Get current commit hash
+			commitHash, err := git.GetCurrentCommitHash(labelRepoPath)
+			if err == nil {
+				label = commitHash
+
+				// Check if there are uncommitted changes
+				isDirty, err := git.HasUncommittedChanges(labelRepoPath)
+				if err == nil && isDirty {
+					label += "-dirty"
+				}
+			}
+		}
+
 		// Output based on format
 		var output string
 		switch outputFormat {
@@ -108,7 +130,7 @@ Example usage:
 			fmt.Println(output)
 
 		case "dot":
-			output = graph.ToDOT()
+			output = graph.ToDOT(label)
 
 			// Generate GraphvizOnline URL if requested
 			if generateURL {

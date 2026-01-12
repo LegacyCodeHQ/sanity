@@ -388,11 +388,22 @@ func GetExtensionColors(fileNames []string) map[string]string {
 }
 
 // ToDOT converts the dependency graph to Graphviz DOT format
-func (g DependencyGraph) ToDOT() string {
+// If label is not empty, it will be displayed at the top of the graph
+func (g DependencyGraph) ToDOT(label string) string {
 	var sb strings.Builder
 	sb.WriteString("digraph dependencies {\n")
 	sb.WriteString("  rankdir=LR;\n")
-	sb.WriteString("  node [shape=box];\n\n")
+	sb.WriteString("  node [shape=box];\n")
+
+	// Add label if provided
+	if label != "" {
+		sb.WriteString(fmt.Sprintf("  label=\"%s\";\n", label))
+		sb.WriteString("  labelloc=t;\n")
+		sb.WriteString("  labeljust=l;\n")
+		sb.WriteString("  fontsize=10;\n")
+		sb.WriteString("  fontname=Courier;\n")
+	}
+	sb.WriteString("\n")
 
 	// Collect all file paths from the graph to determine extension colors
 	filePaths := make([]string, 0, len(g))
