@@ -10,61 +10,12 @@ go-tree-sitter provides built-in support for parsing various programming languag
 
 ### Dart
 
-Dart support required additional setup because there's no pre-built Go binding available in the go-tree-sitter repository.
+Dart support is not available in go-tree-sitter. To add support for Dart:
 
-#### Steps to Add Dart Support
-
-1. **Clone the tree-sitter-dart repository**:
-```bash
-   git clone https://github.com/UserNobody14/tree-sitter-dart
-   cd tree-sitter-dart
-```
-
-2. **Build the parser**:
-```bash
-   # Install the tree-sitter CLI tool
-   # Using cargo (recommended)
-   cargo install --locked tree-sitter-cli
-
-   # Or using npm
-   npm install -g tree-sitter-cli
-
-   # Or download pre-built binaries from:
-   # https://github.com/tree-sitter/tree-sitter/releases/latest
-
-   # Generate parser.c and other necessary files
-   tree-sitter generate
-```
-
-3. **Copy parser files into the project**:
-
-   The following files were copied into `tree_sitter_dart/`:
-   - `parser.c` - The generated parser implementation
-   - `parser.h` - Parser header file
-   - `scanner.c` - Custom scanner for Dart-specific syntax
-
-4. **Create Go bindings** (`tree_sitter_dart/binding.go`):
-```go
-   package tree_sitter_dart
-
-   import "C"
-
-   import (
-       "unsafe"
-       sitter "github.com/smacker/go-tree-sitter"
-   )
-
-   func GetLanguage() *sitter.Language {
-       ptr := unsafe.Pointer(C.tree_sitter_dart())
-       return sitter.NewLanguage(ptr)
-   }
-```
-
-This binding uses CGo to interface with the C-based tree-sitter parser.
-
-5. **Mark as vendored code**:
-
-   Since the `tree_sitter_dart` directory contains generated C code from an external repository, it's marked as vendored to exclude it from language statistics and code analysis.
+1. The [tree-sitter-dart](https://github.com/UserNobody14/tree-sitter-dart) repository was cloned and the parser was built using the [tree-sitter-cli](https://github.com/tree-sitter/tree-sitter/blob/master/crates/cli/README.md) tool.
+2. The parser files (`parser.c`, `parser.h`, `scanner.c`) were copied into `tree_sitter_dart/`
+3. Go bindings were created to interface with the C-based tree-sitter parser using CGo
+4. The `tree_sitter_dart/` directory was marked as vendored code to exclude it from language statistics and code analysis
 
 ## Resources
 
