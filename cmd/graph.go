@@ -6,6 +6,7 @@ import (
 	"sanity/git"
 	"sanity/parsers"
 
+	"github.com/atotto/clipboard"
 	"github.com/spf13/cobra"
 )
 
@@ -92,19 +93,30 @@ Example usage:
 		}
 
 		// Output based on format
+		var output string
 		switch outputFormat {
 		case "json":
 			jsonData, err := graph.ToJSON()
 			if err != nil {
 				return fmt.Errorf("failed to generate JSON: %w", err)
 			}
-			fmt.Println(string(jsonData))
+			output = string(jsonData)
+			fmt.Println(output)
 
 		case "dot":
-			fmt.Print(graph.ToDOT())
+			output = graph.ToDOT()
+			fmt.Print(output)
 
 		default:
 			return fmt.Errorf("unknown output format: %s (valid options: dot, json)", outputFormat)
+		}
+
+		// Copy to clipboard if flag is enabled
+		if copyToClipboard {
+			if err := clipboard.WriteAll(output); err != nil {
+				return fmt.Errorf("failed to copy to clipboard: %w", err)
+			}
+			fmt.Println("\n✅ Content copied to your clipboard.")
 		}
 
 		return nil

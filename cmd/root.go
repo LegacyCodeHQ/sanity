@@ -15,6 +15,9 @@ var buildDate = "unknown"
 // commit is set via build-time ldflags
 var commit = "unknown"
 
+// copyToClipboard is a persistent flag to enable automatic clipboard copying
+var copyToClipboard bool
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "sanity",
@@ -61,5 +64,6 @@ Commit: {{printf "%s" (index .Annotations "commit")}}
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.sanity.yaml)")
+	// Add persistent clipboard flag
+	rootCmd.PersistentFlags().BoolVarP(&copyToClipboard, "clipboard", "b", false, "Automatically copy output to clipboard")
 }
