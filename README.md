@@ -14,6 +14,8 @@ Sanity helps you assess risk and confidently review code you didn't write—from
 
 ### Installation
 
+Install on Linux and Mac using Homebrew:
+
 ```bash
 brew install LegacyCodeHQ/tap/sanity
 ```
@@ -31,11 +33,11 @@ Generate dependency graphs for Dart and Go files.
 
 **Flags**:
 
-| Flag           | Description               | Notes          |
-|----------------|---------------------------|----------------|
-| `--repo, -r`   | Git repository path       | Default: "."   |
-| `--commit, -c` | Git commit to analyze     |                |
-| `--format, -f` | Output format (dot, json) | Default: "dot" |
+| Flag             | Description               | Notes          |
+|------------------|---------------------------|----------------|
+| `--repo`, `-r`   | Git repository path       | Default: "."   |
+| `--commit`, `-c` | Git commit to analyze     |                |
+| `--format`, `-f` | Output format (dot, json) | Default: "dot" |
 
 **Examples**:
 
