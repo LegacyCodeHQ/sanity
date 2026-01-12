@@ -102,9 +102,7 @@ release:
   mode: append
   name_template: "v{{.Version}}"
   header: |
-    ## Sanity v{{.Version}}
-
-    Release of Sanity CLI for analyzing and visualizing dependency graphs.
+    ## Changelog
   footer: |
     **Full Changelog**: https://github.com/LegacyCodeHQ/sanity/compare/{{ .PreviousTag }}...{{ .Tag }}
 
