@@ -1,10 +1,12 @@
 # Language Parsing
 
-The project uses the [go-tree-sitter](https://github.com/smacker/go-tree-sitter) Go bindings to integrate [tree-sitter](https://tree-sitter.github.io/tree-sitter/) for extracting dependency information.
+The project uses the [go-tree-sitter](https://github.com/smacker/go-tree-sitter) bindings to integrate [tree-sitter](https://tree-sitter.github.io/tree-sitter/) for parsing and extracting dependency information from source files.
 
-## Supported Languages
+## Available Languages
 
-**go-tree-sitter** comes with built-in support for various programming languages. Each supported language has its own directory, which can be seen on the [project page](https://github.com/smacker/go-tree-sitter).
+go-tree-sitter provides built-in support for parsing various programming languages, with each language binding in its own directory within the [project's source](https://github.com/smacker/go-tree-sitter).
+
+## Unsupported Languages
 
 ### Dart
 
@@ -68,4 +70,3 @@ This binding uses CGo to interface with the C-based tree-sitter parser.
 
 - [go-tree-sitter](https://github.com/smacker/go-tree-sitter)
 - [tree-sitter-dart](https://github.com/UserNobody14/tree-sitter-dart)
-
