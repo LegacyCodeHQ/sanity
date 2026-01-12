@@ -21,7 +21,7 @@ brew install LegacyCodeHQ/tap/sanity
 ```
 
 For other installation methods (pre-built binaries, build from source, Go install), see
-the [Installation Guide](docs/installation.md).
+the [Installation Guide](docs/usage/installation.md).
 
 ## Usage
 
