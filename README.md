@@ -10,6 +10,17 @@ Sanity helps you assess risk and confidently review code you didn't write—from
 - Dart
 - Go
 
+## Quick Start
+
+### Installation
+
+```bash
+brew install LegacyCodeHQ/tap/sanity
+```
+
+For other installation methods (pre-built binaries, build from source, Go install), see
+the [Installation Guide](docs/installation.md).
+
 ## Usage
 
 ### Commands
