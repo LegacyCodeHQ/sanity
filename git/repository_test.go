@@ -100,6 +100,32 @@ func TestGetUncommittedDartFiles_UntrackedFiles(t *testing.T) {
 	assert.Contains(t, files, resolved2)
 }
 
+func TestGetUncommittedDartFiles_UntrackedFilesInSubdirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupGitRepo(t, tmpDir)
+
+	// Create subdirectory
+	subDir := filepath.Join(tmpDir, "lib")
+	err := os.Mkdir(subDir, 0755)
+	require.NoError(t, err)
+
+	// Create untracked files in subdirectory
+	dartFile1 := createDartFile(t, subDir, "test1.dart")
+	dartFile2 := createDartFile(t, subDir, "test2.dart")
+
+	// Get uncommitted files
+	files, err := GetUncommittedDartFiles(tmpDir)
+
+	require.NoError(t, err)
+	assert.Len(t, files, 2, "should find individual files in subdirectory, not just directory name")
+
+	// Resolve symlinks for comparison (macOS /var -> /private/var)
+	resolved1, _ := filepath.EvalSymlinks(dartFile1)
+	resolved2, _ := filepath.EvalSymlinks(dartFile2)
+	assert.Contains(t, files, resolved1)
+	assert.Contains(t, files, resolved2)
+}
+
 func TestGetUncommittedDartFiles_StagedFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)

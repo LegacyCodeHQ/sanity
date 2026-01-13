@@ -77,7 +77,7 @@ func GetRepositoryRoot(repoPath string) (string, error) {
 
 // getUncommittedFiles returns a list of all uncommitted files (relative to repo root)
 func getUncommittedFiles(repoPath string) ([]string, error) {
-	cmd := exec.Command("git", "status", "--porcelain")
+	cmd := exec.Command("git", "status", "--porcelain", "--untracked-files=all")
 	cmd.Dir = repoPath
 
 	var stdout bytes.Buffer
