@@ -14,6 +14,7 @@ import (
 type FileStats struct {
 	Additions int
 	Deletions int
+	IsNew     bool
 }
 
 // GetUncommittedDartFiles finds all uncommitted files in a git repository.
@@ -123,6 +124,50 @@ func getUncommittedFiles(repoPath string) ([]string, error) {
 	return files, nil
 }
 
+// getUncommittedFileStatuses returns a map of relative file paths to their git status codes
+func getUncommittedFileStatuses(repoPath string) (map[string]string, error) {
+	cmd := exec.Command("git", "status", "--porcelain", "--untracked-files=all")
+	cmd.Dir = repoPath
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return nil, fmt.Errorf("git command failed: %s", stderr.String())
+		}
+		return nil, err
+	}
+
+	statuses := make(map[string]string)
+	lines := strings.Split(stdout.String(), "\n")
+	for _, line := range lines {
+		if len(line) < 4 {
+			continue
+		}
+
+		status := line[:2]
+		filePath := strings.TrimSpace(line[3:])
+
+		// Handle renamed files (format: "old -> new")
+		if strings.Contains(filePath, " -> ") {
+			parts := strings.Split(filePath, " -> ")
+			filePath = parts[1]
+		}
+
+		if filePath == "" {
+			continue
+		}
+
+		normalized := filepath.Clean(filePath)
+		statuses[normalized] = status
+	}
+
+	return statuses, nil
+}
+
 // filterDartFiles filters a list of file paths to include only .dart files
 func filterDartFiles(files []string) []string {
 	var dartFiles []string
@@ -230,6 +275,58 @@ func getCommitFiles(repoPath, commitID string) ([]string, error) {
 	return files, nil
 }
 
+// getCommitFileStatuses returns a map of file paths to their status codes for a commit
+func getCommitFileStatuses(repoPath, commitID string) (map[string]string, error) {
+	cmd := exec.Command("git", "show", "--name-status", "--format=", commitID)
+	cmd.Dir = repoPath
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return nil, fmt.Errorf("git command failed: %s", stderr.String())
+		}
+		return nil, err
+	}
+
+	statuses := make(map[string]string)
+	lines := strings.Split(stdout.String(), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		parts := strings.Split(line, "\t")
+		if len(parts) < 2 {
+			continue
+		}
+
+		status := parts[0]
+		var filePath string
+		if strings.HasPrefix(status, "R") || strings.HasPrefix(status, "C") {
+			if len(parts) < 3 {
+				continue
+			}
+			filePath = parts[2]
+		} else {
+			filePath = parts[1]
+		}
+
+		if filePath == "" {
+			continue
+		}
+
+		normalized := filepath.Clean(filePath)
+		statuses[normalized] = status
+	}
+
+	return statuses, nil
+}
+
 // GetFileContentFromCommit reads the content of a file at a specific commit
 // using 'git show commit:path'. The filePath should be relative to the repository root.
 func GetFileContentFromCommit(repoPath, commitID, filePath string) ([]byte, error) {
@@ -252,6 +349,20 @@ func GetFileContentFromCommit(repoPath, commitID, filePath string) ([]byte, erro
 	}
 
 	return stdout.Bytes(), nil
+}
+
+// isNewStatus determines if a git status code represents a new or untracked file
+func isNewStatus(status string) bool {
+	status = strings.TrimSpace(status)
+	if status == "" {
+		return false
+	}
+
+	if status == "??" {
+		return true
+	}
+
+	return status[0] == 'A'
 }
 
 // GetCurrentCommitHash returns the current commit hash (HEAD)
@@ -393,6 +504,11 @@ func GetUncommittedFileStats(repoPath string) (map[string]FileStats, error) {
 		return nil, err
 	}
 
+	statusMap, err := getUncommittedFileStatuses(repoPath)
+	if err != nil {
+		return nil, err
+	}
+
 	// Parse the numstat output
 	stats := make(map[string]FileStats)
 	lines := strings.Split(stdout.String(), "\n")
@@ -424,6 +540,7 @@ func GetUncommittedFileStats(repoPath string) (map[string]FileStats, error) {
 		// Handle renamed files
 		filePath := strings.Join(parts[2:], " ")
 		filePath = parseRenamedFilePath(filePath)
+		filePath = filepath.Clean(filePath)
 
 		// Convert to absolute path
 		absPath := filepath.Join(repoRoot, filePath)
@@ -431,7 +548,20 @@ func GetUncommittedFileStats(repoPath string) (map[string]FileStats, error) {
 		stats[absPath] = FileStats{
 			Additions: additions,
 			Deletions: deletions,
+			IsNew:     isNewStatus(statusMap[filePath]),
 		}
+	}
+
+	// Include entries for new/untracked files that may not appear in numstat output
+	for relPath, status := range statusMap {
+		if !isNewStatus(status) {
+			continue
+		}
+
+		absPath := filepath.Join(repoRoot, relPath)
+		fileStats := stats[absPath]
+		fileStats.IsNew = true
+		stats[absPath] = fileStats
 	}
 
 	return stats, nil
@@ -478,6 +608,11 @@ func GetCommitFileStats(repoPath, commitID string) (map[string]FileStats, error)
 		return nil, err
 	}
 
+	statusMap, err := getCommitFileStatuses(repoPath, commitID)
+	if err != nil {
+		return nil, err
+	}
+
 	// Parse the numstat output
 	stats := make(map[string]FileStats)
 	lines := strings.Split(stdout.String(), "\n")
@@ -509,6 +644,7 @@ func GetCommitFileStats(repoPath, commitID string) (map[string]FileStats, error)
 		// Handle renamed files
 		filePath := strings.Join(parts[2:], " ")
 		filePath = parseRenamedFilePath(filePath)
+		filePath = filepath.Clean(filePath)
 
 		// Convert to absolute path
 		absPath := filepath.Join(repoRoot, filePath)
@@ -516,7 +652,20 @@ func GetCommitFileStats(repoPath, commitID string) (map[string]FileStats, error)
 		stats[absPath] = FileStats{
 			Additions: additions,
 			Deletions: deletions,
+			IsNew:     isNewStatus(statusMap[filePath]),
 		}
+	}
+
+	// Include entries for new files that may not appear in numstat output
+	for relPath, status := range statusMap {
+		if !isNewStatus(status) {
+			continue
+		}
+
+		absPath := filepath.Join(repoRoot, relPath)
+		fileStats := stats[absPath]
+		fileStats.IsNew = true
+		stats[absPath] = fileStats
 	}
 
 	return stats, nil

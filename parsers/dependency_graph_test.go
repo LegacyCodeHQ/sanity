@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/LegacyCodeHQ/sanity/git"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -228,6 +229,34 @@ func TestDependencyGraph_ToDOT(t *testing.T) {
 	assert.Contains(t, dot, "main.dart")
 	assert.Contains(t, dot, "utils.dart")
 	assert.Contains(t, dot, "->")
+}
+
+func TestDependencyGraph_ToDOT_NewFilesUseSeedlingLabel(t *testing.T) {
+	graph := DependencyGraph{
+		"/project/new_file.dart":       {},
+		"/project/new_with_stats.dart": {},
+		"/project/existing.dart":       {},
+	}
+
+	stats := map[string]git.FileStats{
+		"/project/new_file.dart": {
+			IsNew: true,
+		},
+		"/project/new_with_stats.dart": {
+			IsNew:     true,
+			Additions: 12,
+			Deletions: 1,
+		},
+		"/project/existing.dart": {
+			Additions: 3,
+		},
+	}
+
+	dot := graph.ToDOT("", stats)
+
+	assert.Contains(t, dot, "\"new_file.dart\" [label=\"🪴 new_file.dart\",")
+	assert.Contains(t, dot, "\"new_with_stats.dart\" [label=\"🪴 new_with_stats.dart\\n+12 -1\",")
+	assert.Contains(t, dot, "\"existing.dart\" [label=\"existing.dart\\n+3\",")
 }
 
 func TestDependencyGraph_ToDOT_TestFilesAreLightGreen(t *testing.T) {

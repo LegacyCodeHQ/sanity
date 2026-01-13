@@ -581,6 +581,11 @@ func (g DependencyGraph) ToDOT(label string, fileStats map[string]git.FileStats)
 			nodeLabel := sourceBase
 			if fileStats != nil {
 				if stats, ok := fileStats[source]; ok {
+					labelPrefix := sourceBase
+					if stats.IsNew {
+						labelPrefix = fmt.Sprintf("🪴 %s", labelPrefix)
+					}
+
 					if stats.Additions > 0 || stats.Deletions > 0 {
 						var statsParts []string
 						if stats.Additions > 0 {
@@ -590,8 +595,12 @@ func (g DependencyGraph) ToDOT(label string, fileStats map[string]git.FileStats)
 							statsParts = append(statsParts, fmt.Sprintf("-%d", stats.Deletions))
 						}
 						if len(statsParts) > 0 {
-							nodeLabel = fmt.Sprintf("%s\n%s", sourceBase, strings.Join(statsParts, " "))
+							nodeLabel = fmt.Sprintf("%s\n%s", labelPrefix, strings.Join(statsParts, " "))
+						} else {
+							nodeLabel = labelPrefix
 						}
+					} else if stats.IsNew {
+						nodeLabel = labelPrefix
 					}
 				}
 			}

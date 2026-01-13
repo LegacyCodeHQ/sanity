@@ -486,6 +486,68 @@ func TestGetCommitDartFiles_InvalidPath(t *testing.T) {
 	assert.Contains(t, err.Error(), "does not exist")
 }
 
+func TestGetUncommittedFileStats_MarksNewAndUntrackedFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupGitRepo(t, tmpDir)
+
+	committedFile := createDartFile(t, tmpDir, "committed.dart")
+	gitAdd(t, tmpDir, "committed.dart")
+	gitCommit(t, tmpDir, "Initial commit")
+
+	stagedFile := createDartFile(t, tmpDir, "staged.dart")
+	gitAdd(t, tmpDir, "staged.dart")
+
+	untrackedFile := createDartFile(t, tmpDir, "untracked.dart")
+
+	modifyFile(t, committedFile)
+
+	stats, err := GetUncommittedFileStats(tmpDir)
+	require.NoError(t, err)
+
+	resolvedStaged, _ := filepath.EvalSymlinks(stagedFile)
+	stagedStats, ok := stats[resolvedStaged]
+	require.True(t, ok)
+	assert.True(t, stagedStats.IsNew)
+
+	resolvedUntracked, _ := filepath.EvalSymlinks(untrackedFile)
+	untrackedStats, ok := stats[resolvedUntracked]
+	require.True(t, ok)
+	assert.True(t, untrackedStats.IsNew)
+
+	resolvedCommitted, _ := filepath.EvalSymlinks(committedFile)
+	committedStats, ok := stats[resolvedCommitted]
+	require.True(t, ok)
+	assert.False(t, committedStats.IsNew)
+}
+
+func TestGetCommitFileStats_MarksNewFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupGitRepo(t, tmpDir)
+
+	existingFile := createDartFile(t, tmpDir, "existing.dart")
+	gitAdd(t, tmpDir, "existing.dart")
+	gitCommit(t, tmpDir, "Initial commit")
+
+	addedFile := createDartFile(t, tmpDir, "added.dart")
+	gitAdd(t, tmpDir, "added.dart")
+	modifyFile(t, existingFile)
+	gitAdd(t, tmpDir, "existing.dart")
+	commitID := gitCommitAndGetSHA(t, tmpDir, "Add new file and modify existing")
+
+	stats, err := GetCommitFileStats(tmpDir, commitID)
+	require.NoError(t, err)
+
+	resolvedAdded, _ := filepath.EvalSymlinks(addedFile)
+	addedStats, ok := stats[resolvedAdded]
+	require.True(t, ok)
+	assert.True(t, addedStats.IsNew)
+
+	resolvedExisting, _ := filepath.EvalSymlinks(existingFile)
+	existingStats, ok := stats[resolvedExisting]
+	require.True(t, ok)
+	assert.False(t, existingStats.IsNew)
+}
+
 // Tests for parseRenamedFilePath
 
 func TestParseRenamedFilePath_AbbreviatedFormat(t *testing.T) {
