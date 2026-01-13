@@ -181,46 +181,46 @@ func BuildDependencyGraph(filePaths []string, repoPath, commitID string) (Depend
 				}
 			}
 		} else if ext == ".kt" {
-		var imports []kotlin.KotlinImport
-		var err error
+			var imports []kotlin.KotlinImport
+			var err error
 
-		if repoPath != "" && commitID != "" {
-			// Read file from git commit
-			relPath := getRelativePath(absPath, repoPath)
-			content, err := git.GetFileContentFromCommit(repoPath, commitID, relPath)
+			if repoPath != "" && commitID != "" {
+				// Read file from git commit
+				relPath := getRelativePath(absPath, repoPath)
+				content, err := git.GetFileContentFromCommit(repoPath, commitID, relPath)
+				if err != nil {
+					return nil, fmt.Errorf("failed to read %s from commit %s: %w", relPath, commitID, err)
+				}
+				imports, err = kotlin.ParseKotlinImports(content)
+			} else {
+				// Read file from filesystem
+				imports, err = kotlin.KotlinImports(filePath)
+			}
+
 			if err != nil {
-				return nil, fmt.Errorf("failed to read %s from commit %s: %w", relPath, commitID, err)
+				return nil, fmt.Errorf("failed to parse imports in %s: %w", filePath, err)
 			}
-			imports, err = kotlin.ParseKotlinImports(content)
-		} else {
-			// Read file from filesystem
-			imports, err = kotlin.KotlinImports(filePath)
-		}
 
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse imports in %s: %w", filePath, err)
-		}
+			// Extract project packages for classification
+			projectPackages := make(map[string]bool)
+			for pkg := range kotlinPackageIndex {
+				projectPackages[pkg] = true
+			}
 
-		// Extract project packages for classification
-		projectPackages := make(map[string]bool)
-		for pkg := range kotlinPackageIndex {
-			projectPackages[pkg] = true
-		}
+			// Reclassify imports with knowledge of project packages
+			imports = kotlin.ClassifyWithProjectPackages(imports, projectPackages)
 
-		// Reclassify imports with knowledge of project packages
-		imports = kotlin.ClassifyWithProjectPackages(imports, projectPackages)
-
-		// Filter for internal imports and resolve to files
-		for _, imp := range imports {
-			if internalImp, ok := imp.(kotlin.InternalImport); ok {
-				// Resolve to file paths
-				resolvedFiles := resolveKotlinImportPath(absPath, internalImp, kotlinPackageIndex, suppliedFiles)
-				projectImports = append(projectImports, resolvedFiles...)
+			// Filter for internal imports and resolve to files
+			for _, imp := range imports {
+				if internalImp, ok := imp.(kotlin.InternalImport); ok {
+					// Resolve to file paths
+					resolvedFiles := resolveKotlinImportPath(absPath, internalImp, kotlinPackageIndex, suppliedFiles)
+					projectImports = append(projectImports, resolvedFiles...)
+				}
 			}
 		}
-	}
 
-	graph[absPath] = projectImports
+		graph[absPath] = projectImports
 	}
 
 	// Third pass: Add intra-package dependencies for Go files

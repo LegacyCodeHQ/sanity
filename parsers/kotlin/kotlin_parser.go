@@ -110,9 +110,9 @@ func classifyKotlinImport(importPath string, isWildcard bool, projectPackages ma
 // isStandardLibrary checks if an import path is from the Kotlin/Java/Android standard library
 func isStandardLibrary(path string) bool {
 	stdLibPrefixes := []string{
-		"kotlin.", "kotlinx.",   // Kotlin stdlib and extensions
-		"java.", "javax.",       // Java stdlib
-		"android.",              // Android SDK
+		"kotlin.", "kotlinx.", // Kotlin stdlib and extensions
+		"java.", "javax.", // Java stdlib
+		"android.", // Android SDK
 	}
 
 	for _, prefix := range stdLibPrefixes {
