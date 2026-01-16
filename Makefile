@@ -37,18 +37,18 @@ help:
 test:
 	go test ./...
 
-# Run tests with coverage percentage (exclude cmd package as it has no tests)
+# Run tests with coverage percentage (exclude cmd packages as they have no tests)
 test-coverage:
-	@go list ./... | grep -v '/cmd$$' | xargs go test -cover
+	@go list ./... | grep -Ev '/cmd($$|/)' | xargs go test -cover
 
 # Alternative: test all packages including cmd (may fail on Go 1.25+)
 test-coverage-all:
 	go test -cover ./...
 
-# Generate coverage profile (exclude cmd package as it has no tests)
+# Generate coverage profile (exclude cmd packages as they have no tests)
 coverage:
 	@echo "mode: atomic" > coverage.out
-	@go list ./... | grep -v '/cmd$$' | while read pkg; do \
+	@go list ./... | grep -Ev '/cmd($$|/)' | while read pkg; do \
 		go test -coverprofile=coverage.tmp -covermode=atomic $$pkg || true; \
 		if [ -f coverage.tmp ]; then \
 			tail -n +2 coverage.tmp >> coverage.out; \
