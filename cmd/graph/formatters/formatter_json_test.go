@@ -15,8 +15,7 @@ func TestDependencyGraph_ToJSON(t *testing.T) {
 		"/project/utils.dart": {},
 	}
 
-	formatter, err := formatters.NewFormatter("json")
-	require.NoError(t, err)
+	formatter := &formatters.JSONFormatter{}
 	jsonData, err := formatter.Format(graph, formatters.FormatOptions{})
 
 	require.NoError(t, err)
