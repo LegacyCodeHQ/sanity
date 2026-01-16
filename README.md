@@ -69,7 +69,7 @@ sanity graph --commit 8d4f78
 sanity graph --repo /path/to/repo --commit HEAD~1
 
 # Analyze specific files directly
-sanity graph file1.dart file2.dart file3.dart
+sanity graph --input file1.dart,file2.dart,file3.dart
 ```
 
 #### Help

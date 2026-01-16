@@ -34,7 +34,7 @@ All files are included in the graph. Dart files will show their dependencies,
 while non-Dart files appear as standalone nodes with no connections.
 
 Supports three modes:
-  1. Explicit files: Analyze specific files (--include)
+  1. Explicit files: Analyze specific files (--input)
   2. Uncommitted files: Analyze all uncommitted files (default: current directory)
   3. Commit analysis: Analyze files changed in a commit (--commit)
 
@@ -51,7 +51,7 @@ Example usage:
   sanity graph --commit 8d4f78 --format=mermaid
   sanity graph --format=mermaid --url
   sanity graph --repo /path/to/repo --commit 8d4f78 --format=dot
-  sanity graph --include file1.dart,file2.dart,file3.dart
+  sanity graph --input file1.dart,file2.dart,file3.dart
   sanity graph --url --commit 8d4f78
   sanity graph -u --between main.go,./git/repository.go`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -62,9 +62,9 @@ Example usage:
 		var fromCommit, toCommit string
 		var isCommitRange bool
 
-		// Validate --between cannot be used with --include
+		// Validate --between cannot be used with --input
 		if len(betweenFiles) > 0 && len(includes) > 0 {
-			return fmt.Errorf("--between cannot be used with --include flag")
+			return fmt.Errorf("--between cannot be used with --input flag")
 		}
 
 		// If no explicit files provided and no repo path specified, default to current directory
@@ -75,7 +75,7 @@ Example usage:
 		if repoPath != "" {
 			// Ensure --repo and explicit files are not both provided
 			if len(includes) > 0 {
-				return fmt.Errorf("cannot use --repo flag with --include flag")
+				return fmt.Errorf("cannot use --repo flag with --input flag")
 			}
 
 			if commitID != "" {
@@ -140,7 +140,7 @@ Example usage:
 		} else {
 			// Validate --commit cannot be used with explicit files
 			if commitID != "" {
-				return fmt.Errorf("--commit flag cannot be used with --include flag")
+				return fmt.Errorf("--commit flag cannot be used with --input flag")
 			}
 
 			// Explicit file mode - expand directories recursively
@@ -346,8 +346,8 @@ func init() {
 	GraphCmd.Flags().StringVarP(&commitID, "commit", "c", "", "Git commit to analyze")
 	// Add URL flag
 	GraphCmd.Flags().BoolVarP(&generateURL, "url", "u", false, "Generate GraphvizOnline URL for visualization")
-	// Add include flag for explicit files
-	GraphCmd.Flags().StringSliceVarP(&includes, "include", "i", nil, "Files or directories to include in the graph (comma-separated, directories are expanded recursively)")
+	// Add input flag for explicit files/directories
+	GraphCmd.Flags().StringSliceVarP(&includes, "input", "i", nil, "Files or directories to analyze (comma-separated, directories are expanded recursively)")
 	// Add between flag for finding paths between files
 	GraphCmd.Flags().StringSliceVarP(&betweenFiles, "between", "w", nil, "Find all files on shortest paths between specified files (comma-separated)")
 }
