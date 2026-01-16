@@ -8,38 +8,6 @@ import (
 	"github.com/LegacyCodeHQ/sanity/git"
 )
 
-// GetExtensionColors takes a list of file names and returns a map containing
-// file extensions and corresponding colors. Each unique extension is assigned
-// a color from a predefined palette.
-func GetExtensionColors(fileNames []string) map[string]string {
-	// Available colors for dynamic assignment to extensions
-	availableColors := []string{
-		"lightblue", "lightyellow", "mistyrose", "lightcyan", "lightsalmon",
-		"lightpink", "lavender", "peachpuff", "plum", "powderblue", "khaki",
-		"palegreen", "palegoldenrod", "paleturquoise", "thistle",
-	}
-
-	// Extract unique extensions from file names
-	uniqueExtensions := make(map[string]bool)
-	for _, fileName := range fileNames {
-		ext := filepath.Ext(fileName)
-		if ext != "" {
-			uniqueExtensions[ext] = true
-		}
-	}
-
-	// Assign colors to extensions
-	extensionColors := make(map[string]string)
-	colorIndex := 0
-	for ext := range uniqueExtensions {
-		color := availableColors[colorIndex%len(availableColors)]
-		extensionColors[ext] = color
-		colorIndex++
-	}
-
-	return extensionColors
-}
-
 // ToDOT converts the dependency graph to Graphviz DOT format
 // If label is not empty, it will be displayed at the top of the graph
 // If fileStats is provided, additions/deletions will be shown in node labels

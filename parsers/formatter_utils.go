@@ -1,0 +1,60 @@
+package parsers
+
+import (
+	"path/filepath"
+	"strings"
+)
+
+// GetExtensionColors takes a list of file names and returns a map containing
+// file extensions and corresponding colors. Each unique extension is assigned
+// a color from a predefined palette.
+func GetExtensionColors(fileNames []string) map[string]string {
+	// Available colors for dynamic assignment to extensions
+	availableColors := []string{
+		"lightblue", "lightyellow", "mistyrose", "lightcyan", "lightsalmon",
+		"lightpink", "lavender", "peachpuff", "plum", "powderblue", "khaki",
+		"palegreen", "palegoldenrod", "paleturquoise", "thistle",
+	}
+
+	// Extract unique extensions from file names
+	uniqueExtensions := make(map[string]bool)
+	for _, fileName := range fileNames {
+		ext := filepath.Ext(fileName)
+		if ext != "" {
+			uniqueExtensions[ext] = true
+		}
+	}
+
+	// Assign colors to extensions
+	extensionColors := make(map[string]string)
+	colorIndex := 0
+	for ext := range uniqueExtensions {
+		color := availableColors[colorIndex%len(availableColors)]
+		extensionColors[ext] = color
+		colorIndex++
+	}
+
+	return extensionColors
+}
+
+// isTestFile checks if a file is a test file based on naming conventions
+func isTestFile(source string) bool {
+	sourceBase := filepath.Base(source)
+	if strings.HasSuffix(sourceBase, "_test.go") {
+		return true
+	}
+	if filepath.Ext(sourceBase) == ".dart" && strings.Contains(filepath.ToSlash(source), "/test/") {
+		return true
+	}
+	// TypeScript/JavaScript test files
+	ext := filepath.Ext(sourceBase)
+	if ext == ".ts" || ext == ".tsx" || ext == ".js" || ext == ".jsx" {
+		if strings.HasSuffix(sourceBase, ".test"+ext) || strings.HasSuffix(sourceBase, ".spec"+ext) {
+			return true
+		}
+		if strings.Contains(filepath.ToSlash(source), "/__tests__/") {
+			return true
+		}
+	}
+	return false
+}
