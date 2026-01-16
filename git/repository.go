@@ -107,7 +107,13 @@ func getUncommittedFiles(repoPath string) ([]string, error) {
 
 		// Porcelain format: XY filename
 		// X = status in index, Y = status in working tree
-		// We want all files that have any status
+		// Skip deleted files (D in either position) as they don't exist on the filesystem
+		statusX := line[0]
+		statusY := line[1]
+		if statusX == 'D' || statusY == 'D' {
+			continue
+		}
+
 		filePath := strings.TrimSpace(line[3:])
 
 		// Handle renamed files (format: "old -> new")
