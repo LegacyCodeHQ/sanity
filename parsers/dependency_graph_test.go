@@ -1156,3 +1156,269 @@ data class Order(val id: Int, val userId: Int)`
 	assert.Empty(t, graph[productPath])
 	assert.Empty(t, graph[orderPath])
 }
+
+func TestBuildDependencyGraph_TypeScriptFiles(t *testing.T) {
+	// Create temporary directory with test TypeScript files
+	tmpDir := t.TempDir()
+
+	// Create index.ts
+	indexContent := `
+import { User } from './models/user';
+import { ApiService } from './services/api';
+import fs from 'fs';
+import React from 'react';
+
+export const app = { name: 'test' };
+`
+	indexPath := filepath.Join(tmpDir, "index.ts")
+	err := os.WriteFile(indexPath, []byte(indexContent), 0644)
+	require.NoError(t, err)
+
+	// Create models directory and user.ts
+	modelsDir := filepath.Join(tmpDir, "models")
+	err = os.Mkdir(modelsDir, 0755)
+	require.NoError(t, err)
+
+	userContent := `
+import { validateName } from '../utils/validator';
+
+export interface User {
+  name: string;
+}
+`
+	userPath := filepath.Join(modelsDir, "user.ts")
+	err = os.WriteFile(userPath, []byte(userContent), 0644)
+	require.NoError(t, err)
+
+	// Create services directory and api.ts
+	servicesDir := filepath.Join(tmpDir, "services")
+	err = os.Mkdir(servicesDir, 0755)
+	require.NoError(t, err)
+
+	apiContent := `
+import axios from 'axios';
+import { User } from '../models/user';
+
+export class ApiService {
+  async getUsers(): Promise<User[]> {
+    return [];
+  }
+}
+`
+	apiPath := filepath.Join(servicesDir, "api.ts")
+	err = os.WriteFile(apiPath, []byte(apiContent), 0644)
+	require.NoError(t, err)
+
+	// Create utils directory and validator.ts
+	utilsDir := filepath.Join(tmpDir, "utils")
+	err = os.Mkdir(utilsDir, 0755)
+	require.NoError(t, err)
+
+	validatorContent := `
+export function validateName(name: string): boolean {
+  return name.length > 0;
+}
+`
+	validatorPath := filepath.Join(utilsDir, "validator.ts")
+	err = os.WriteFile(validatorPath, []byte(validatorContent), 0644)
+	require.NoError(t, err)
+
+	// Build dependency graph
+	files := []string{indexPath, userPath, apiPath, validatorPath}
+	graph, err := BuildDependencyGraph(files, "", "")
+
+	require.NoError(t, err)
+	assert.Len(t, graph, 4)
+
+	// Check index.ts dependencies (should have 2 project imports - user and api)
+	// External imports like fs and React should be filtered out
+	indexDeps := graph[indexPath]
+	assert.Len(t, indexDeps, 2)
+	assert.Contains(t, indexDeps, userPath)
+	assert.Contains(t, indexDeps, apiPath)
+
+	// Check user.ts dependencies (should have 1 project import - validator)
+	userDeps := graph[userPath]
+	assert.Len(t, userDeps, 1)
+	assert.Contains(t, userDeps, validatorPath)
+
+	// Check api.ts dependencies (should have 1 project import - user)
+	// External import axios should be filtered out
+	apiDeps := graph[apiPath]
+	assert.Len(t, apiDeps, 1)
+	assert.Contains(t, apiDeps, userPath)
+
+	// Check validator.ts dependencies (should have none)
+	validatorDeps := graph[validatorPath]
+	assert.Empty(t, validatorDeps)
+}
+
+func TestBuildDependencyGraph_TypeScriptWithTSX(t *testing.T) {
+	// Create temporary directory with TypeScript and TSX files
+	tmpDir := t.TempDir()
+
+	// Create App.tsx
+	appContent := `
+import React from 'react';
+import { Button } from './components/Button';
+import { useUser } from './hooks/useUser';
+
+const App: React.FC = () => {
+  const user = useUser();
+  return <Button onClick={() => {}}>{user.name}</Button>;
+};
+
+export default App;
+`
+	appPath := filepath.Join(tmpDir, "App.tsx")
+	err := os.WriteFile(appPath, []byte(appContent), 0644)
+	require.NoError(t, err)
+
+	// Create components directory and Button.tsx
+	componentsDir := filepath.Join(tmpDir, "components")
+	err = os.Mkdir(componentsDir, 0755)
+	require.NoError(t, err)
+
+	buttonContent := `
+import React from 'react';
+
+interface ButtonProps {
+  onClick: () => void;
+  children: React.ReactNode;
+}
+
+export const Button: React.FC<ButtonProps> = ({ onClick, children }) => {
+  return <button onClick={onClick}>{children}</button>;
+};
+`
+	buttonPath := filepath.Join(componentsDir, "Button.tsx")
+	err = os.WriteFile(buttonPath, []byte(buttonContent), 0644)
+	require.NoError(t, err)
+
+	// Create hooks directory and useUser.ts
+	hooksDir := filepath.Join(tmpDir, "hooks")
+	err = os.Mkdir(hooksDir, 0755)
+	require.NoError(t, err)
+
+	useUserContent := `
+import { useState } from 'react';
+
+export const useUser = () => {
+  const [user] = useState({ name: 'Test User' });
+  return user;
+};
+`
+	useUserPath := filepath.Join(hooksDir, "useUser.ts")
+	err = os.WriteFile(useUserPath, []byte(useUserContent), 0644)
+	require.NoError(t, err)
+
+	// Build dependency graph
+	files := []string{appPath, buttonPath, useUserPath}
+	graph, err := BuildDependencyGraph(files, "", "")
+
+	require.NoError(t, err)
+	assert.Len(t, graph, 3)
+
+	// Check App.tsx dependencies (should have Button.tsx and useUser.ts)
+	appDeps := graph[appPath]
+	assert.Len(t, appDeps, 2)
+	assert.Contains(t, appDeps, buttonPath)
+	assert.Contains(t, appDeps, useUserPath)
+
+	// Check Button.tsx dependencies (should have none - only external React)
+	buttonDeps := graph[buttonPath]
+	assert.Empty(t, buttonDeps)
+
+	// Check useUser.ts dependencies (should have none - only external React)
+	useUserDeps := graph[useUserPath]
+	assert.Empty(t, useUserDeps)
+}
+
+func TestBuildDependencyGraph_TypeScriptReExports(t *testing.T) {
+	// Create temporary directory with TypeScript files using re-exports
+	tmpDir := t.TempDir()
+
+	// Create index.ts that re-exports from other modules
+	indexContent := `
+export { User } from './models/user';
+export { ApiService } from './services/api';
+export * from './utils';
+`
+	indexPath := filepath.Join(tmpDir, "index.ts")
+	err := os.WriteFile(indexPath, []byte(indexContent), 0644)
+	require.NoError(t, err)
+
+	// Create models directory and user.ts
+	modelsDir := filepath.Join(tmpDir, "models")
+	err = os.Mkdir(modelsDir, 0755)
+	require.NoError(t, err)
+
+	userContent := `
+export interface User {
+  name: string;
+}
+`
+	userPath := filepath.Join(modelsDir, "user.ts")
+	err = os.WriteFile(userPath, []byte(userContent), 0644)
+	require.NoError(t, err)
+
+	// Create services directory and api.ts
+	servicesDir := filepath.Join(tmpDir, "services")
+	err = os.Mkdir(servicesDir, 0755)
+	require.NoError(t, err)
+
+	apiContent := `
+export class ApiService {}
+`
+	apiPath := filepath.Join(servicesDir, "api.ts")
+	err = os.WriteFile(apiPath, []byte(apiContent), 0644)
+	require.NoError(t, err)
+
+	// Create utils.ts
+	utilsContent := `
+export function helper() {}
+`
+	utilsPath := filepath.Join(tmpDir, "utils.ts")
+	err = os.WriteFile(utilsPath, []byte(utilsContent), 0644)
+	require.NoError(t, err)
+
+	// Build dependency graph
+	files := []string{indexPath, userPath, apiPath, utilsPath}
+	graph, err := BuildDependencyGraph(files, "", "")
+
+	require.NoError(t, err)
+	assert.Len(t, graph, 4)
+
+	// Check index.ts dependencies (should have all 3 re-exported files)
+	indexDeps := graph[indexPath]
+	assert.Len(t, indexDeps, 3)
+	assert.Contains(t, indexDeps, userPath)
+	assert.Contains(t, indexDeps, apiPath)
+	assert.Contains(t, indexDeps, utilsPath)
+}
+
+func TestDependencyGraph_ToDOT_TypeScriptTestFiles(t *testing.T) {
+	// Test TypeScript test files are styled as light green
+	graph := DependencyGraph{
+		"/project/src/App.tsx":                     {"/project/src/utils.tsx"},
+		"/project/src/utils.tsx":                   {},
+		"/project/src/App.test.tsx":                {"/project/src/App.tsx"},
+		"/project/src/__tests__/utils.test.tsx":   {"/project/src/utils.tsx"},
+		"/project/src/components/Button.spec.tsx": {},
+	}
+
+	dot := graph.ToDOT("", nil)
+
+	// Test files with .test.tsx suffix should be light green
+	assert.Contains(t, dot, `"App.test.tsx" [label="App.test.tsx", style=filled, fillcolor=lightgreen]`)
+
+	// Test files in __tests__ directory should be light green
+	assert.Contains(t, dot, `"utils.test.tsx" [label="utils.test.tsx", style=filled, fillcolor=lightgreen]`)
+
+	// Test files with .spec.tsx suffix should be light green
+	assert.Contains(t, dot, `"Button.spec.tsx" [label="Button.spec.tsx", style=filled, fillcolor=lightgreen]`)
+
+	// Non-test files should NOT be light green (they should be white as majority extension)
+	assert.Contains(t, dot, `"App.tsx" [label="App.tsx", style=filled, fillcolor=white]`)
+	assert.Contains(t, dot, `"utils.tsx" [label="utils.tsx", style=filled, fillcolor=white]`)
+}

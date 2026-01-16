@@ -12,6 +12,7 @@ import (
 	"github.com/LegacyCodeHQ/sanity/parsers/dart"
 	_go "github.com/LegacyCodeHQ/sanity/parsers/go"
 	"github.com/LegacyCodeHQ/sanity/parsers/kotlin"
+	"github.com/LegacyCodeHQ/sanity/parsers/typescript"
 )
 
 // DependencyGraph represents a mapping from file paths to their project dependencies
@@ -73,7 +74,7 @@ func BuildDependencyGraph(filePaths []string, repoPath, commitID string) (Depend
 		ext := filepath.Ext(absPath)
 
 		// Check if this is a supported file type
-		if ext != ".dart" && ext != ".go" && ext != ".kt" {
+		if ext != ".dart" && ext != ".go" && ext != ".kt" && ext != ".ts" && ext != ".tsx" {
 			// Unsupported files are included in the graph with no dependencies
 			graph[absPath] = []string{}
 			continue
@@ -237,6 +238,34 @@ func BuildDependencyGraph(filePaths []string, repoPath, commitID string) (Depend
 					suppliedFiles,
 				)
 				projectImports = append(projectImports, samePackageDeps...)
+			}
+		} else if ext == ".ts" || ext == ".tsx" {
+			var imports []typescript.TypeScriptImport
+			var parseErr error
+
+			if repoPath != "" && commitID != "" {
+				// Read file from git commit
+				relPath := getRelativePath(absPath, repoPath)
+				content, err := git.GetFileContentFromCommit(repoPath, commitID, relPath)
+				if err != nil {
+					return nil, fmt.Errorf("failed to read %s from commit %s: %w", relPath, commitID, err)
+				}
+				imports, parseErr = typescript.ParseTypeScriptImports(content, ext == ".tsx")
+			} else {
+				// Read file from filesystem
+				imports, parseErr = typescript.TypeScriptImports(filePath)
+			}
+
+			if parseErr != nil {
+				return nil, fmt.Errorf("failed to parse imports in %s: %w", filePath, parseErr)
+			}
+
+			// Filter for internal imports and resolve to files
+			for _, imp := range imports {
+				if internalImp, ok := imp.(typescript.InternalImport); ok {
+					resolvedFiles := typescript.ResolveTypeScriptImportPath(absPath, internalImp.Path(), suppliedFiles)
+					projectImports = append(projectImports, resolvedFiles...)
+				}
 			}
 		}
 
@@ -500,6 +529,16 @@ func (g DependencyGraph) ToMermaid(label string, fileStats map[string]git.FileSt
 		if filepath.Ext(sourceBase) == ".dart" && strings.Contains(filepath.ToSlash(source), "/test/") {
 			return true
 		}
+		// TypeScript/JavaScript test files
+		ext := filepath.Ext(sourceBase)
+		if ext == ".ts" || ext == ".tsx" || ext == ".js" || ext == ".jsx" {
+			if strings.HasSuffix(sourceBase, ".test"+ext) || strings.HasSuffix(sourceBase, ".spec"+ext) {
+				return true
+			}
+			if strings.Contains(filepath.ToSlash(source), "/__tests__/") {
+				return true
+			}
+		}
 		return false
 	}
 
@@ -711,6 +750,17 @@ func (g DependencyGraph) ToDOT(label string, fileStats map[string]git.FileStats)
 		// Dart test files: check if in test/ directory
 		if filepath.Ext(sourceBase) == ".dart" && strings.Contains(filepath.ToSlash(source), "/test/") {
 			return true
+		}
+
+		// TypeScript/JavaScript test files
+		ext := filepath.Ext(sourceBase)
+		if ext == ".ts" || ext == ".tsx" || ext == ".js" || ext == ".jsx" {
+			if strings.HasSuffix(sourceBase, ".test"+ext) || strings.HasSuffix(sourceBase, ".spec"+ext) {
+				return true
+			}
+			if strings.Contains(filepath.ToSlash(source), "/__tests__/") {
+				return true
+			}
 		}
 
 		return false
