@@ -9,6 +9,14 @@ import (
 	"github.com/LegacyCodeHQ/sanity/parsers"
 )
 
+// MermaidFormatter formats dependency graphs as Mermaid.js flowcharts.
+type MermaidFormatter struct{}
+
+// Format converts the dependency graph to Mermaid.js flowchart format.
+func (f *MermaidFormatter) Format(g parsers.DependencyGraph, opts FormatOptions) (string, error) {
+	return ToMermaid(g, opts.Label, opts.FileStats), nil
+}
+
 // ToMermaid converts the dependency graph to Mermaid.js flowchart format
 // If label is not empty, it will be displayed as a title
 // If fileStats is provided, additions/deletions will be shown in node labels

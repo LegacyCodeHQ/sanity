@@ -6,7 +6,21 @@ import (
 	"github.com/LegacyCodeHQ/sanity/parsers"
 )
 
-// ToJSON converts the dependency graph to JSON format
+// JSONFormatter formats dependency graphs as JSON.
+type JSONFormatter struct{}
+
+// Format converts the dependency graph to JSON format.
+// The opts parameter is accepted for interface compatibility but not used.
+func (f *JSONFormatter) Format(g parsers.DependencyGraph, opts FormatOptions) (string, error) {
+	data, err := json.MarshalIndent(g, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+// ToJSON converts the dependency graph to JSON format.
+// Deprecated: Use JSONFormatter.Format instead.
 func ToJSON(g parsers.DependencyGraph) ([]byte, error) {
 	return json.MarshalIndent(g, "", "  ")
 }

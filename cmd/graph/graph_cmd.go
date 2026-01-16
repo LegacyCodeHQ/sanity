@@ -176,41 +176,38 @@ Example usage:
 			}
 		}
 
-		// Output based on format
-		var output string
+		// Create formatter and generate output
+		formatter, err := formatters.NewFormatter(outputFormat)
+		if err != nil {
+			return err
+		}
+
+		opts := formatters.FormatOptions{
+			Label:     label,
+			FileStats: fileStats,
+		}
+
+		output, err := formatter.Format(graph, opts)
+		if err != nil {
+			return fmt.Errorf("failed to format graph: %w", err)
+		}
+
+		// Handle URL generation and output
 		switch outputFormat {
-		case "json":
-			jsonData, err := formatters.ToJSON(graph)
-			if err != nil {
-				return fmt.Errorf("failed to generate JSON: %w", err)
-			}
-			output = string(jsonData)
-			fmt.Println(output)
-
 		case "dot":
-			output = formatters.ToDOT(graph, label, fileStats)
-
-			// Generate GraphvizOnline URL if requested
 			if generateURL {
-				vizURL := generateGraphvizOnlineURL(output)
-				fmt.Println(vizURL)
+				fmt.Println(generateGraphvizOnlineURL(output))
 			} else {
 				fmt.Print(output)
 			}
-
 		case "mermaid":
-			output = formatters.ToMermaid(graph, label, fileStats)
-
-			// Generate Mermaid.live URL if requested
 			if generateURL {
-				vizURL := generateMermaidLiveURL(output)
-				fmt.Println(vizURL)
+				fmt.Println(generateMermaidLiveURL(output))
 			} else {
 				fmt.Print(output)
 			}
-
 		default:
-			return fmt.Errorf("unknown output format: %s (valid options: dot, json, mermaid)", outputFormat)
+			fmt.Println(output)
 		}
 
 		// Copy to clipboard if flag is enabled

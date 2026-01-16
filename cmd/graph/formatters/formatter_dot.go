@@ -9,6 +9,14 @@ import (
 	"github.com/LegacyCodeHQ/sanity/parsers"
 )
 
+// DOTFormatter formats dependency graphs as Graphviz DOT.
+type DOTFormatter struct{}
+
+// Format converts the dependency graph to Graphviz DOT format.
+func (f *DOTFormatter) Format(g parsers.DependencyGraph, opts FormatOptions) (string, error) {
+	return ToDOT(g, opts.Label, opts.FileStats), nil
+}
+
 // ToDOT converts the dependency graph to Graphviz DOT format
 // If label is not empty, it will be displayed at the top of the graph
 // If fileStats is provided, additions/deletions will be shown in node labels
