@@ -22,3 +22,8 @@ func (f *JSONFormatter) Format(g parsers.DependencyGraph, opts FormatOptions) (s
 	}
 	return string(data), nil
 }
+
+// GenerateURL returns false as JSON format does not support URL generation.
+func (f *JSONFormatter) GenerateURL(output string) (string, bool) {
+	return "", false
+}

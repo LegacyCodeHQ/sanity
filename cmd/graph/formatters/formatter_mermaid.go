@@ -1,7 +1,10 @@
 package formatters
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"strings"
 
@@ -162,4 +165,25 @@ func (f *MermaidFormatter) Format(g parsers.DependencyGraph, opts FormatOptions)
 		sb.WriteString(fmt.Sprintf("    class %s newFile\n", strings.Join(newFileNodes, ",")))
 	}
 	return sb.String(), nil
+}
+
+// GenerateURL creates a mermaid.live URL with the diagram embedded.
+func (f *MermaidFormatter) GenerateURL(output string) (string, bool) {
+	payload := map[string]interface{}{
+		"code": output,
+		"mermaid": map[string]interface{}{
+			"theme": "default",
+		},
+		"autoSync":      true,
+		"updateDiagram": true,
+	}
+
+	jsonBytes, err := json.Marshal(payload)
+	if err != nil {
+		// Fallback: just return the code URL-encoded
+		return fmt.Sprintf("https://mermaid.live/edit#%s", url.PathEscape(output)), true
+	}
+
+	encoded := base64.URLEncoding.EncodeToString(jsonBytes)
+	return fmt.Sprintf("https://mermaid.live/edit#base64:%s", encoded), true
 }

@@ -2,6 +2,7 @@ package formatters
 
 import (
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"strings"
 
@@ -161,4 +162,10 @@ func (f *DOTFormatter) Format(g parsers.DependencyGraph, opts FormatOptions) (st
 
 	sb.WriteString("}\n")
 	return sb.String(), nil
+}
+
+// GenerateURL creates a GraphvizOnline URL with the DOT graph embedded.
+func (f *DOTFormatter) GenerateURL(output string) (string, bool) {
+	encoded := url.PathEscape(output)
+	return fmt.Sprintf("https://dreampuf.github.io/GraphvizOnline/?engine=dot#%s", encoded), true
 }

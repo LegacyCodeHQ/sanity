@@ -1,10 +1,7 @@
 package graph
 
 import (
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 
@@ -275,21 +272,15 @@ Example usage:
 		}
 
 		// Handle URL generation and output
-		switch format {
-		case formatters.OutputFormatDOT:
-			if generateURL {
-				fmt.Println(generateGraphvizOnlineURL(output))
+		if generateURL {
+			if urlStr, ok := formatter.GenerateURL(output); ok {
+				fmt.Println(urlStr)
 			} else {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: URL generation is not supported for %s format\n\n", format)
 				fmt.Print(output)
 			}
-		case formatters.OutputFormatMermaid:
-			if generateURL {
-				fmt.Println(generateMermaidLiveURL(output))
-			} else {
-				fmt.Print(output)
-			}
-		default:
-			fmt.Println(output)
+		} else {
+			fmt.Print(output)
 		}
 
 		// Copy to clipboard if flag is enabled
@@ -303,39 +294,6 @@ Example usage:
 
 		return nil
 	},
-}
-
-// generateGraphvizOnlineURL creates a URL for GraphvizOnline with the DOT graph embedded
-func generateGraphvizOnlineURL(dotGraph string) string {
-	// URL encode the DOT graph for use in fragment (spaces as %20, not +)
-	encoded := url.PathEscape(dotGraph)
-
-	// Create the GraphvizOnline URL with the encoded graph
-	return fmt.Sprintf("https://dreampuf.github.io/GraphvizOnline/?engine=dot#%s", encoded)
-}
-
-// generateMermaidLiveURL creates a URL for mermaid.live with the diagram embedded
-func generateMermaidLiveURL(mermaidCode string) string {
-	// Mermaid.live uses a JSON payload encoded in base64
-	payload := map[string]interface{}{
-		"code": mermaidCode,
-		"mermaid": map[string]interface{}{
-			"theme": "default",
-		},
-		"autoSync":      true,
-		"updateDiagram": true,
-	}
-
-	jsonBytes, err := json.Marshal(payload)
-	if err != nil {
-		// Fallback: just return the code URL-encoded
-		return fmt.Sprintf("https://mermaid.live/edit#%s", url.PathEscape(mermaidCode))
-	}
-
-	// Base64 encode the JSON payload
-	encoded := base64.URLEncoding.EncodeToString(jsonBytes)
-
-	return fmt.Sprintf("https://mermaid.live/edit#base64:%s", encoded)
 }
 
 func init() {
