@@ -3,13 +3,7 @@
 [![License](https://img.shields.io/github/license/LegacyCodeHQ/sanity)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/LegacyCodeHQ/sanity)](https://github.com/LegacyCodeHQ/sanity/releases)
 
-The missing compass for AI-assisted software engineering.
-
-## Use Cases
-
-- Review AI-generated code
-- Restructure vibe-coded apps
-- Navigate unfamiliar codebases with confidence
+Sanity helps you review AI-generated code, restructure vibe-coded apps, and navigate unfamiliar codebases with confidence.
 
 ## Visuals
 
