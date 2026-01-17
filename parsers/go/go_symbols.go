@@ -6,9 +6,11 @@ import (
 	"go/token"
 	"path/filepath"
 	"strings"
-
-	"github.com/LegacyCodeHQ/sanity/vcs"
 )
+
+// ContentReader is a function that reads file content given a file path.
+// This allows the caller to control how files are read (filesystem, git, etc.)
+type ContentReader func(filePath string) ([]byte, error)
 
 // GoSymbolInfo tracks symbols defined and referenced in a Go file
 type GoSymbolInfo struct {
@@ -249,8 +251,10 @@ func extractExportInfoFromAST(filePath string, node *ast.File) (*GoExportInfo, e
 	return info, nil
 }
 
-// BuildPackageExportIndex builds an index of exported symbols for files in a package directory
-func BuildPackageExportIndex(filePaths []string, repoPath, commitID string) (GoPackageExportIndex, error) {
+// BuildPackageExportIndex builds an index of exported symbols for files in a package directory.
+// The contentReader function is used to read file contents, allowing the caller to control
+// whether files are read from the filesystem, a git commit, or another source.
+func BuildPackageExportIndex(filePaths []string, contentReader ContentReader) (GoPackageExportIndex, error) {
 	index := make(GoPackageExportIndex)
 
 	for _, filePath := range filePaths {
@@ -259,25 +263,12 @@ func BuildPackageExportIndex(filePaths []string, repoPath, commitID string) (GoP
 			continue
 		}
 
-		var info *GoExportInfo
-		var err error
-
-		if repoPath != "" && commitID != "" {
-			absRepoPath, _ := filepath.Abs(repoPath)
-			relPath, err := filepath.Rel(absRepoPath, filePath)
-			if err != nil {
-				continue
-			}
-
-			content, err := git.GetFileContentFromCommit(repoPath, commitID, relPath)
-			if err != nil {
-				continue
-			}
-			info, err = ExtractGoExportInfoFromContent(filePath, content)
-		} else {
-			info, err = ExtractGoExportInfo(filePath)
+		content, err := contentReader(filePath)
+		if err != nil {
+			continue
 		}
 
+		info, err := ExtractGoExportInfoFromContent(filePath, content)
 		if err != nil {
 			continue
 		}
@@ -301,9 +292,10 @@ func GetUsedSymbolsFromPackage(exportInfo *GoExportInfo, importPath string) map[
 	return exportInfo.QualifiedRefs[alias]
 }
 
-// BuildIntraPackageDependencies builds dependencies between files in the same Go package
-// If repoPath and commitID are provided, files are read from the git commit instead of the filesystem
-func BuildIntraPackageDependencies(filePaths []string, repoPath, commitID string) (map[string][]string, error) {
+// BuildIntraPackageDependencies builds dependencies between files in the same Go package.
+// The contentReader function is used to read file contents, allowing the caller to control
+// whether files are read from the filesystem, a git commit, or another source.
+func BuildIntraPackageDependencies(filePaths []string, contentReader ContentReader) (map[string][]string, error) {
 	// Group files by package
 	packageFiles := make(map[string][]string)
 	for _, filePath := range filePaths {
@@ -330,30 +322,13 @@ func BuildIntraPackageDependencies(filePaths []string, repoPath, commitID string
 
 		// Extract symbols from all files in the package
 		for _, file := range files {
-			var info *GoSymbolInfo
-			var err error
-
-			if repoPath != "" && commitID != "" {
-				// Read file from git commit
-				// Convert absolute path to relative path for git
-				absRepoPath, _ := filepath.Abs(repoPath)
-				relPath, err := filepath.Rel(absRepoPath, file)
-				if err != nil {
-					// Skip files we can't resolve
-					continue
-				}
-
-				content, err := git.GetFileContentFromCommit(repoPath, commitID, relPath)
-				if err != nil {
-					// Skip files that can't be read from commit
-					continue
-				}
-				info, err = ExtractGoSymbolsFromContent(file, content)
-			} else {
-				// Read file from filesystem
-				info, err = ExtractGoSymbols(file)
+			content, err := contentReader(file)
+			if err != nil {
+				// Skip files that can't be read
+				continue
 			}
 
+			info, err := ExtractGoSymbolsFromContent(file, content)
 			if err != nil {
 				// Skip files that can't be parsed
 				continue

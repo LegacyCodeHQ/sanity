@@ -52,6 +52,11 @@ func BuildDependencyGraph(filePaths []string, repoPath, commitID string) (Depend
 		}
 	}
 
+	// Create a content reader that handles both filesystem and git commit reads
+	contentReader := func(filePath string) ([]byte, error) {
+		return readFileContent(filePath, repoPath, commitID)
+	}
+
 	// Build Go package export indices for symbol-level cross-package resolution
 	goPackageExportIndices := make(map[string]_go.GoPackageExportIndex) // packageDir -> export index
 	for dir, files := range dirToFiles {
@@ -65,7 +70,7 @@ func BuildDependencyGraph(filePaths []string, repoPath, commitID string) (Depend
 			}
 		}
 		if hasGoFiles {
-			exportIndex, err := _go.BuildPackageExportIndex(goFilesInDir, repoPath, commitID)
+			exportIndex, err := _go.BuildPackageExportIndex(goFilesInDir, contentReader)
 			if err == nil {
 				goPackageExportIndices[dir] = exportIndex
 			}
@@ -349,7 +354,7 @@ func BuildDependencyGraph(filePaths []string, repoPath, commitID string) (Depend
 	// Note: goFiles was already collected in the first pass
 
 	if len(goFiles) > 0 {
-		intraDeps, err := _go.BuildIntraPackageDependencies(goFiles, repoPath, commitID)
+		intraDeps, err := _go.BuildIntraPackageDependencies(goFiles, contentReader)
 		if err != nil {
 			// Don't fail if intra-package analysis fails, just skip it
 			return graph, nil
