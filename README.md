@@ -3,7 +3,13 @@
 [![License](https://img.shields.io/github/license/LegacyCodeHQ/sanity)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/LegacyCodeHQ/sanity)](https://github.com/LegacyCodeHQ/sanity/releases)
 
-Sanity helps you assess risk and confidently review AI-generated code before you commit it.
+The missing compass for AI-assisted software engineering.
+
+## Use Cases
+
+- Review AI-generated code
+- Restructure vibe-coded apps
+- Navigate unfamiliar codebases with confidence
 
 ## Visuals
 
