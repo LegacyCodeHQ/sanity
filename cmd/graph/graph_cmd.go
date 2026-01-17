@@ -130,9 +130,18 @@ Examples:
 		}
 
 		// Build the dependency graph
-		// Pass repoPath and toCommit if we're analyzing a commit (otherwise pass empty strings)
-		// For ranges, toCommit is the right side; for single commits, it's the commit itself
-		graph, err := parsers.BuildDependencyGraph(filePaths, repoPath, toCommit)
+		// Create the appropriate content reader based on whether we're analyzing a commit
+		var contentReader parsers.ContentReader
+		if toCommit != "" {
+			contentReader = func(absPath string) ([]byte, error) {
+				relPath := parsers.GetRelativePath(absPath, repoPath)
+				return vcs.GetFileContentFromCommit(repoPath, toCommit, relPath)
+			}
+		} else {
+			contentReader = parsers.FilesystemContentReader()
+		}
+
+		graph, err := parsers.BuildDependencyGraph(filePaths, contentReader)
 		if err != nil {
 			return fmt.Errorf("failed to build dependency graph: %w", err)
 		}

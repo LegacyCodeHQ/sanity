@@ -11,15 +11,25 @@ import (
 	_go "github.com/LegacyCodeHQ/sanity/parsers/go"
 	"github.com/LegacyCodeHQ/sanity/parsers/kotlin"
 	"github.com/LegacyCodeHQ/sanity/parsers/typescript"
-	"github.com/LegacyCodeHQ/sanity/vcs"
 )
+
+// ContentReader is a function that reads file content given an absolute path.
+// This abstracts the source of file content (filesystem, git commit, etc.)
+type ContentReader func(absPath string) ([]byte, error)
+
+// FilesystemContentReader returns a ContentReader that reads from the filesystem.
+func FilesystemContentReader() ContentReader {
+	return func(absPath string) ([]byte, error) {
+		return os.ReadFile(absPath)
+	}
+}
 
 // BuildDependencyGraph analyzes a list of files and builds a dependency graph
 // containing only project imports (excluding package:/dart: imports for Dart,
 // and standard library/external imports for Go).
 // Only dependencies that are in the supplied file list are included in the graph.
-// If repoPath and commitID are provided, files are read from the git commit instead of the filesystem.
-func BuildDependencyGraph(filePaths []string, repoPath, commitID string) (DependencyGraph, error) {
+// The contentReader function is used to read file contents (from filesystem, git commit, etc.)
+func BuildDependencyGraph(filePaths []string, contentReader ContentReader) (DependencyGraph, error) {
 	graph := make(DependencyGraph)
 
 	// First pass: build a set of all supplied file paths (as absolute paths)
@@ -52,11 +62,6 @@ func BuildDependencyGraph(filePaths []string, repoPath, commitID string) (Depend
 		}
 	}
 
-	// Create a content reader that handles both filesystem and git commit reads
-	contentReader := func(filePath string) ([]byte, error) {
-		return readFileContent(filePath, repoPath, commitID)
-	}
-
 	// Build Go package export indices for symbol-level cross-package resolution
 	goPackageExportIndices := make(map[string]_go.GoPackageExportIndex) // packageDir -> export index
 	for dir, files := range dirToFiles {
@@ -70,7 +75,7 @@ func BuildDependencyGraph(filePaths []string, repoPath, commitID string) (Depend
 			}
 		}
 		if hasGoFiles {
-			exportIndex, err := _go.BuildPackageExportIndex(goFilesInDir, contentReader)
+			exportIndex, err := _go.BuildPackageExportIndex(goFilesInDir, _go.ContentReader(contentReader))
 			if err == nil {
 				goPackageExportIndices[dir] = exportIndex
 			}
@@ -82,7 +87,7 @@ func BuildDependencyGraph(filePaths []string, repoPath, commitID string) (Depend
 	var kotlinPackageTypes map[string]map[string][]string
 	kotlinFilePackages := make(map[string]string)
 	if len(kotlinFiles) > 0 {
-		kotlinPackageIndex, kotlinPackageTypes = buildKotlinPackageIndex(kotlinFiles, repoPath, commitID)
+		kotlinPackageIndex, kotlinPackageTypes = buildKotlinPackageIndex(kotlinFiles, contentReader)
 		for pkg, files := range kotlinPackageIndex {
 			for _, file := range files {
 				kotlinFilePackages[file] = pkg
@@ -111,22 +116,12 @@ func BuildDependencyGraph(filePaths []string, repoPath, commitID string) (Depend
 		var projectImports []string
 
 		if ext == ".dart" {
-			var imports []dart.Import
-			var err error
-
-			if repoPath != "" && commitID != "" {
-				// Read file from git commit
-				relPath := getRelativePath(absPath, repoPath)
-				content, err := vcs.GetFileContentFromCommit(repoPath, commitID, relPath)
-				if err != nil {
-					return nil, fmt.Errorf("failed to read %s from commit %s: %w", relPath, commitID, err)
-				}
-				imports, err = dart.ParseImports(content)
-			} else {
-				// Read file from filesystem
-				imports, err = dart.Imports(filePath)
+			content, err := contentReader(absPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read %s: %w", absPath, err)
 			}
 
+			imports, err := dart.ParseImports(content)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse imports in %s: %w", filePath, err)
 			}
@@ -144,34 +139,18 @@ func BuildDependencyGraph(filePaths []string, repoPath, commitID string) (Depend
 				}
 			}
 		} else if ext == ".go" {
-			var imports []_go.GoImport
-			var err error
-			var sourceContent []byte
-
-			if repoPath != "" && commitID != "" {
-				// Read file from git commit
-				relPath := getRelativePath(absPath, repoPath)
-				sourceContent, err = vcs.GetFileContentFromCommit(repoPath, commitID, relPath)
-				if err != nil {
-					return nil, fmt.Errorf("failed to read %s from commit %s: %w", relPath, commitID, err)
-				}
-				imports, err = _go.ParseGoImports(sourceContent)
-			} else {
-				// Read file from filesystem
-				imports, err = _go.GoImports(filePath)
+			sourceContent, err := contentReader(absPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read %s: %w", absPath, err)
 			}
 
+			imports, err := _go.ParseGoImports(sourceContent)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse imports in %s: %w", filePath, err)
 			}
 
 			// Extract export info for symbol-level cross-package resolution
-			var exportInfo *_go.GoExportInfo
-			if sourceContent != nil {
-				exportInfo, _ = _go.ExtractGoExportInfoFromContent(absPath, sourceContent)
-			} else {
-				exportInfo, _ = _go.ExtractGoExportInfo(absPath)
-			}
+			exportInfo, _ := _go.ExtractGoExportInfoFromContent(absPath, sourceContent)
 
 			// Determine if this is a test file
 			isTestFile := strings.HasSuffix(absPath, "_test.go")
@@ -192,7 +171,7 @@ func BuildDependencyGraph(filePaths []string, repoPath, commitID string) (Depend
 				}
 
 				// Resolve import path to package directory
-				packageDir := resolveGoImportPath(absPath, importPath, repoPath, commitID)
+				packageDir := resolveGoImportPath(absPath, importPath, contentReader)
 
 				// Skip if packageDir is empty (means it's truly external or couldn't be resolved)
 				if packageDir == "" {
@@ -262,22 +241,12 @@ func BuildDependencyGraph(filePaths []string, repoPath, commitID string) (Depend
 				}
 			}
 		} else if ext == ".kt" {
-			var imports []kotlin.KotlinImport
-			var err error
-
-			if repoPath != "" && commitID != "" {
-				// Read file from git commit
-				relPath := getRelativePath(absPath, repoPath)
-				content, err := vcs.GetFileContentFromCommit(repoPath, commitID, relPath)
-				if err != nil {
-					return nil, fmt.Errorf("failed to read %s from commit %s: %w", relPath, commitID, err)
-				}
-				imports, err = kotlin.ParseKotlinImports(content)
-			} else {
-				// Read file from filesystem
-				imports, err = kotlin.KotlinImports(filePath)
+			content, err := contentReader(absPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read %s: %w", absPath, err)
 			}
 
+			imports, err := kotlin.ParseKotlinImports(content)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse imports in %s: %w", filePath, err)
 			}
@@ -303,8 +272,7 @@ func BuildDependencyGraph(filePaths []string, repoPath, commitID string) (Depend
 			if len(kotlinPackageTypes) > 0 {
 				samePackageDeps := resolveKotlinSamePackageDependencies(
 					absPath,
-					repoPath,
-					commitID,
+					contentReader,
 					kotlinFilePackages,
 					kotlinPackageTypes,
 					imports,
@@ -313,22 +281,12 @@ func BuildDependencyGraph(filePaths []string, repoPath, commitID string) (Depend
 				projectImports = append(projectImports, samePackageDeps...)
 			}
 		} else if ext == ".ts" || ext == ".tsx" {
-			var imports []typescript.TypeScriptImport
-			var parseErr error
-
-			if repoPath != "" && commitID != "" {
-				// Read file from git commit
-				relPath := getRelativePath(absPath, repoPath)
-				content, err := vcs.GetFileContentFromCommit(repoPath, commitID, relPath)
-				if err != nil {
-					return nil, fmt.Errorf("failed to read %s from commit %s: %w", relPath, commitID, err)
-				}
-				imports, parseErr = typescript.ParseTypeScriptImports(content, ext == ".tsx")
-			} else {
-				// Read file from filesystem
-				imports, parseErr = typescript.TypeScriptImports(filePath)
+			content, err := contentReader(absPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read %s: %w", absPath, err)
 			}
 
+			imports, parseErr := typescript.ParseTypeScriptImports(content, ext == ".tsx")
 			if parseErr != nil {
 				return nil, fmt.Errorf("failed to parse imports in %s: %w", filePath, parseErr)
 			}
@@ -354,7 +312,7 @@ func BuildDependencyGraph(filePaths []string, repoPath, commitID string) (Depend
 	// Note: goFiles was already collected in the first pass
 
 	if len(goFiles) > 0 {
-		intraDeps, err := _go.BuildIntraPackageDependencies(goFiles, contentReader)
+		intraDeps, err := _go.BuildIntraPackageDependencies(goFiles, _go.ContentReader(contentReader))
 		if err != nil {
 			// Don't fail if intra-package analysis fails, just skip it
 			return graph, nil
@@ -402,8 +360,8 @@ func resolveImportPath(sourceFile, importURI, fileExt string) string {
 }
 
 // resolveGoImportPath resolves a Go import path to an absolute file path
-// If repoPath and commitID are provided, it reads go.mod from the commit; otherwise from filesystem
-func resolveGoImportPath(sourceFile, importPath, repoPath, commitID string) string {
+// The contentReader is used to read go.mod content
+func resolveGoImportPath(sourceFile, importPath string, contentReader ContentReader) string {
 	// For Go files, we need to find the module root and resolve the import
 	// This is a simplified version that assumes the project follows standard Go module structure
 
@@ -414,14 +372,8 @@ func resolveGoImportPath(sourceFile, importPath, repoPath, commitID string) stri
 		return ""
 	}
 
-	// Get the module name from go.mod (from commit if analyzing a commit, otherwise from filesystem)
-	var moduleName string
-	if repoPath != "" && commitID != "" {
-		moduleName = getModuleNameFromCommit(repoPath, commitID, moduleRoot)
-	} else {
-		moduleName = getModuleName(moduleRoot)
-	}
-
+	// Get the module name from go.mod using the content reader
+	moduleName := getModuleName(moduleRoot, contentReader)
 	if moduleName == "" {
 		return ""
 	}
@@ -462,51 +414,10 @@ func findModuleRoot(startDir string) string {
 	}
 }
 
-// getModuleName reads the module name from go.mod
-func getModuleName(moduleRoot string) string {
+// getModuleName reads the module name from go.mod using the content reader
+func getModuleName(moduleRoot string, contentReader ContentReader) string {
 	goModPath := filepath.Join(moduleRoot, "go.mod")
-	file, err := os.Open(goModPath)
-	if err != nil {
-		return ""
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if strings.HasPrefix(line, "module ") {
-			return strings.TrimSpace(strings.TrimPrefix(line, "module"))
-		}
-	}
-
-	return ""
-}
-
-// getModuleNameFromCommit reads the module name from go.mod at a specific commit
-func getModuleNameFromCommit(repoPath, commitID, moduleRoot string) string {
-	// Get absolute repo path
-	absRepoPath, err := filepath.Abs(repoPath)
-	if err != nil {
-		return ""
-	}
-
-	// Get relative path from repo root to module root
-	relPath, err := filepath.Rel(absRepoPath, moduleRoot)
-	if err != nil {
-		// If moduleRoot is not under repoPath, try reading from the commit root
-		relPath = ""
-	}
-
-	// Construct path to go.mod in the commit
-	var goModPath string
-	if relPath != "" && relPath != "." {
-		goModPath = filepath.Join(relPath, "go.mod")
-	} else {
-		goModPath = "go.mod"
-	}
-
-	// Read go.mod from the commit
-	content, err := vcs.GetFileContentFromCommit(repoPath, commitID, goModPath)
+	content, err := contentReader(goModPath)
 	if err != nil {
 		return ""
 	}
@@ -523,8 +434,8 @@ func getModuleNameFromCommit(repoPath, commitID, moduleRoot string) string {
 	return ""
 }
 
-// getRelativePath converts an absolute file path to a path relative to the repository root
-func getRelativePath(absPath, repoPath string) string {
+// GetRelativePath converts an absolute file path to a path relative to the repository root
+func GetRelativePath(absPath, repoPath string) string {
 	// Get absolute repository path
 	absRepoPath, err := filepath.Abs(repoPath)
 	if err != nil {
@@ -548,7 +459,7 @@ func getRelativePath(absPath, repoPath string) string {
 }
 
 // buildKotlinPackageIndex builds maps describing available Kotlin packages and their type declarations
-func buildKotlinPackageIndex(filePaths []string, repoPath, commitID string) (map[string][]string, map[string]map[string][]string) {
+func buildKotlinPackageIndex(filePaths []string, contentReader ContentReader) (map[string][]string, map[string]map[string][]string) {
 	packageToFiles := make(map[string][]string)
 	packageToTypes := make(map[string]map[string][]string)
 
@@ -558,7 +469,7 @@ func buildKotlinPackageIndex(filePaths []string, repoPath, commitID string) (map
 			continue
 		}
 
-		content, err := readFileContent(absPath, repoPath, commitID)
+		content, err := contentReader(absPath)
 		if err != nil {
 			continue
 		}
@@ -641,8 +552,7 @@ func resolveKotlinImportPath(
 // resolveKotlinSamePackageDependencies finds Kotlin dependencies that are referenced without imports (same-package references)
 func resolveKotlinSamePackageDependencies(
 	sourceFile string,
-	repoPath string,
-	commitID string,
+	contentReader ContentReader,
 	filePackages map[string]string,
 	packageTypeIndex map[string]map[string][]string,
 	imports []kotlin.KotlinImport,
@@ -658,7 +568,7 @@ func resolveKotlinSamePackageDependencies(
 		return nil
 	}
 
-	sourceCode, err := readFileContent(sourceFile, repoPath, commitID)
+	sourceCode, err := contentReader(sourceFile)
 	if err != nil {
 		return nil
 	}
@@ -704,16 +614,6 @@ func resolveKotlinSamePackageDependencies(
 	}
 
 	return deps
-}
-
-// readFileContent reads a file either from the working tree or a specific git commit
-func readFileContent(absPath, repoPath, commitID string) ([]byte, error) {
-	if repoPath != "" && commitID != "" {
-		relPath := getRelativePath(absPath, repoPath)
-		return vcs.GetFileContentFromCommit(repoPath, commitID, relPath)
-	}
-
-	return os.ReadFile(absPath)
 }
 
 // extractSimpleName returns the trailing identifier from a dot-delimited path
