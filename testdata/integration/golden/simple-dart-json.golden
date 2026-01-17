@@ -1,0 +1,5 @@
+{
+  "{{FIXTURE_PATH}}/main.dart": ["{{FIXTURE_PATH}}/utils/math.dart","{{FIXTURE_PATH}}/utils/strings.dart"],
+  "{{FIXTURE_PATH}}/utils/math.dart": null,
+  "{{FIXTURE_PATH}}/utils/strings.dart": null
+}

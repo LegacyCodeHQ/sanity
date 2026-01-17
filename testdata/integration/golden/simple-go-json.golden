@@ -1,0 +1,5 @@
+{
+  "{{FIXTURE_PATH}}/main.go": ["{{FIXTURE_PATH}}/utils/math.go"],
+  "{{FIXTURE_PATH}}/utils/math.go": [],
+  "{{FIXTURE_PATH}}/utils/strings.go": []
+}

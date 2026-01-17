@@ -1,0 +1,13 @@
+---
+title: sanity • {{COMMIT}}-dirty • 3 files
+---
+flowchart LR
+    n0["🪴 main.go<br/>+12"]
+    n1["🪴 math.go<br/>+6"]
+    n2["🪴 strings.go<br/>+8"]
+
+    n0 --> n1
+
+    classDef newFile fill:#87CEEB,stroke:#4682B4
+    classDef testFile fill:#90EE90,stroke:#228B22,color:#000000
+    class n0,n1,n2 newFile

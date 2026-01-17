@@ -1,0 +1,17 @@
+digraph dependencies {
+  rankdir=LR;
+  node [shape=box];
+  label="sanity • {{COMMIT}}-dirty • 3 files";
+  labelloc=t;
+  labeljust=l;
+  fontsize=10;
+  fontname=Courier;
+
+  "main.go" [label="🪴 main.go\n+12", style=filled, fillcolor=white];
+  "math.go" [label="🪴 math.go\n+6", style=filled, fillcolor=white];
+  "math.go";
+  "strings.go" [label="🪴 strings.go\n+8", style=filled, fillcolor=white];
+  "strings.go";
+
+  "main.go" -> "math.go";
+}

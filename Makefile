@@ -1,4 +1,4 @@
-.PHONY: test test-coverage coverage coverage-html clean help build build-version build-local release-snapshot release-check
+.PHONY: test test-coverage coverage coverage-html clean help build build-version build-local release-snapshot release-check test-integration test-integration-update
 
 # Version information (can be overridden via command line)
 # Try to get version from git tag, otherwise use "dev"
@@ -15,10 +15,12 @@ help:
 	@echo "Available targets:"
 	@echo ""
 	@echo "Testing:"
-	@echo "  test             - Run all tests"
-	@echo "  test-coverage    - Run tests with coverage percentage"
-	@echo "  coverage         - Generate coverage profile (coverage.out)"
-	@echo "  coverage-html    - Generate HTML coverage report (coverage.html)"
+	@echo "  test                    - Run all unit tests"
+	@echo "  test-coverage           - Run tests with coverage percentage"
+	@echo "  test-integration        - Run integration tests (golden file comparison)"
+	@echo "  test-integration-update - Update golden files for integration tests"
+	@echo "  coverage                - Generate coverage profile (coverage.out)"
+	@echo "  coverage-html           - Generate HTML coverage report (coverage.html)"
 	@echo ""
 	@echo "Building:"
 	@echo "  build            - Build the binary (default version: dev)"
@@ -96,3 +98,11 @@ build-local:
 	CGO_ENABLED=1 go build -ldflags "-s -w -X sanity/cmd.version=$(VERSION) -X sanity/cmd.buildDate=$(BUILD_DATE) -X sanity/cmd.commit=$(COMMIT)" -o sanity ./main.go
 	@echo ""
 	@echo "Build successful! Run './sanity --version' to test"
+
+# Run integration tests (compares output against golden files)
+test-integration:
+	go test -tags=integration -v ./...
+
+# Update golden files for integration tests
+test-integration-update:
+	go test -tags=integration -v -update ./...

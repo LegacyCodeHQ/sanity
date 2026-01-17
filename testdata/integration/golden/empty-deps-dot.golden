@@ -1,0 +1,13 @@
+digraph dependencies {
+  rankdir=LR;
+  node [shape=box];
+  label="sanity • {{COMMIT}}-dirty • 1 file";
+  labelloc=t;
+  labeljust=l;
+  fontsize=10;
+  fontname=Courier;
+
+  "standalone.go" [label="🪴 standalone.go\n+7", style=filled, fillcolor=white];
+  "standalone.go";
+
+}
