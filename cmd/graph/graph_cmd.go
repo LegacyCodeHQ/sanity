@@ -34,6 +34,7 @@ Examples:
   sanity graph -c HEAD~3                      # single commit
   sanity graph -c f0459ec...be3d11a           # commit range
   sanity graph -i ./main.go,./lib             # specific files/directories
+  sanity graph -c HEAD -i ./lib               # files in directory at commit
   sanity graph -w ./main.go,./utils.go        # paths between files
   sanity graph -u                             # generate visualization URL`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -49,83 +50,27 @@ Examples:
 			return fmt.Errorf("--between cannot be used with --input flag")
 		}
 
-		// If no explicit files provided and no repo path specified, default to current directory
-		if len(includes) == 0 && repoPath == "" {
+		// Default to current directory for git operations if not specified
+		if repoPath == "" {
 			repoPath = "."
 		}
 
-		if repoPath != "" {
-			// Ensure --repo and explicit files are not both provided
-			if len(includes) > 0 {
-				return fmt.Errorf("cannot use --repo flag with --input flag")
-			}
+		// Parse commit range if --commit is specified
+		if commitID != "" {
+			fromCommit, toCommit, isCommitRange = git.ParseCommitRange(commitID)
 
-			if commitID != "" {
-				// Parse potential commit range
-				fromCommit, toCommit, isCommitRange = git.ParseCommitRange(commitID)
-
-				if isCommitRange {
-					// Normalize commit range to chronological order (older...newer)
-					fromCommit, toCommit, _, err = git.NormalizeCommitRange(repoPath, fromCommit, toCommit)
-					if err != nil {
-						return fmt.Errorf("failed to normalize commit range: %w", err)
-					}
-
-					// Commit range mode
-					filePaths, err = git.GetCommitRangeFiles(repoPath, fromCommit, toCommit)
-					if err != nil {
-						return fmt.Errorf("failed to get files from commit range: %w", err)
-					}
-
-					if len(filePaths) == 0 {
-						return fmt.Errorf("no files changed in commit range %s", commitID)
-					}
-				} else {
-					// Single commit mode
-					filePaths, err = git.GetCommitDartFiles(repoPath, toCommit)
-					if err != nil {
-						return fmt.Errorf("failed to get files from commit: %w", err)
-					}
-
-					if len(filePaths) == 0 {
-						return fmt.Errorf("no files changed in commit %s", toCommit)
-					}
-				}
-			} else if len(betweenFiles) > 0 {
-				// When --between is provided without --commit, expand all files in working directory
-				filePaths, err = expandPaths([]string{repoPath})
+			if isCommitRange {
+				// Normalize commit range to chronological order (older...newer)
+				fromCommit, toCommit, _, err = git.NormalizeCommitRange(repoPath, fromCommit, toCommit)
 				if err != nil {
-					return fmt.Errorf("failed to expand working directory: %w", err)
-				}
-
-				if len(filePaths) == 0 {
-					return fmt.Errorf("no supported files found in working directory")
-				}
-			} else {
-				// Uncommitted files mode
-				filePaths, err = git.GetUncommittedDartFiles(repoPath)
-				if err != nil {
-					return fmt.Errorf("failed to get uncommitted files: %w", err)
-				}
-
-				if len(filePaths) == 0 {
-					fmt.Println("Working directory is clean (no uncommitted changes).")
-					fmt.Println()
-					fmt.Println("To visualize the most recent commit:")
-					fmt.Println("  sanity graph -c HEAD")
-					fmt.Println()
-					fmt.Println("To visualize a specific commit:")
-					fmt.Println("  sanity graph -c <commit-hash>")
-					return nil
+					return fmt.Errorf("failed to normalize commit range: %w", err)
 				}
 			}
-		} else {
-			// Validate --commit cannot be used with explicit files
-			if commitID != "" {
-				return fmt.Errorf("--commit flag cannot be used with --input flag")
-			}
+		}
 
-			// Explicit file mode - expand directories recursively
+		// Determine file paths based on flags
+		if len(includes) > 0 {
+			// Explicit file/directory mode - expand directories recursively
 			filePaths, err = expandPaths(includes)
 			if err != nil {
 				return fmt.Errorf("failed to expand paths: %w", err)
@@ -133,6 +78,54 @@ Examples:
 
 			if len(filePaths) == 0 {
 				return fmt.Errorf("no supported files found in specified paths")
+			}
+		} else if commitID != "" {
+			// Commit mode without explicit files - get files changed in commit
+			if isCommitRange {
+				filePaths, err = git.GetCommitRangeFiles(repoPath, fromCommit, toCommit)
+				if err != nil {
+					return fmt.Errorf("failed to get files from commit range: %w", err)
+				}
+
+				if len(filePaths) == 0 {
+					return fmt.Errorf("no files changed in commit range %s", commitID)
+				}
+			} else {
+				filePaths, err = git.GetCommitDartFiles(repoPath, toCommit)
+				if err != nil {
+					return fmt.Errorf("failed to get files from commit: %w", err)
+				}
+
+				if len(filePaths) == 0 {
+					return fmt.Errorf("no files changed in commit %s", toCommit)
+				}
+			}
+		} else if len(betweenFiles) > 0 {
+			// When --between is provided without --commit or --input, expand all files in working directory
+			filePaths, err = expandPaths([]string{repoPath})
+			if err != nil {
+				return fmt.Errorf("failed to expand working directory: %w", err)
+			}
+
+			if len(filePaths) == 0 {
+				return fmt.Errorf("no supported files found in working directory")
+			}
+		} else {
+			// Default: uncommitted files mode
+			filePaths, err = git.GetUncommittedDartFiles(repoPath)
+			if err != nil {
+				return fmt.Errorf("failed to get uncommitted files: %w", err)
+			}
+
+			if len(filePaths) == 0 {
+				fmt.Println("Working directory is clean (no uncommitted changes).")
+				fmt.Println()
+				fmt.Println("To visualize the most recent commit:")
+				fmt.Println("  sanity graph -c HEAD")
+				fmt.Println()
+				fmt.Println("To visualize a specific commit:")
+				fmt.Println("  sanity graph -c <commit-hash>")
+				return nil
 			}
 		}
 
