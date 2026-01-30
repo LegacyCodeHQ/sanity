@@ -20,6 +20,8 @@ var generateURL bool
 var copyToClipboard bool
 var includes []string
 var betweenFiles []string
+var targetFile string
+var depthLevel int
 
 // GraphCmd represents the graph command
 var GraphCmd = &cobra.Command{
@@ -36,6 +38,8 @@ Examples:
   sanity graph -i ./main.go,./lib             # specific files/directories
   sanity graph -c HEAD -i ./lib               # files in directory at commit
   sanity graph -w ./main.go,./utils.go        # paths between files
+  sanity graph -p ./main.go                   # dependencies of a specific file (level 1)
+  sanity graph -p ./main.go -l 2              # dependencies up to 2 levels deep
   sanity graph -u                             # generate visualization URL`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var filePaths []string
@@ -48,6 +52,19 @@ Examples:
 		// Validate --between cannot be used with --input
 		if len(betweenFiles) > 0 && len(includes) > 0 {
 			return fmt.Errorf("--between cannot be used with --input flag")
+		}
+
+		// Validate --file cannot be used with --between or --input
+		if targetFile != "" {
+			if len(betweenFiles) > 0 {
+				return fmt.Errorf("--file cannot be used with --between flag")
+			}
+			if len(includes) > 0 {
+				return fmt.Errorf("--file cannot be used with --input flag")
+			}
+			if depthLevel < 1 {
+				return fmt.Errorf("--level must be at least 1")
+			}
 		}
 
 		// Default to current directory for git operations if not specified
@@ -110,6 +127,16 @@ Examples:
 			if len(filePaths) == 0 {
 				return fmt.Errorf("no supported files found in working directory")
 			}
+		} else if targetFile != "" {
+			// When --file is provided, expand all files in working directory to build full graph
+			filePaths, err = expandPaths([]string{repoPath})
+			if err != nil {
+				return fmt.Errorf("failed to expand working directory: %w", err)
+			}
+
+			if len(filePaths) == 0 {
+				return fmt.Errorf("no supported files found in working directory")
+			}
 		} else {
 			// Default: uncommitted files mode
 			filePaths, err = vcs.GetUncommittedDartFiles(repoPath)
@@ -144,6 +171,29 @@ Examples:
 		graph, err := parsers.BuildDependencyGraph(filePaths, contentReader)
 		if err != nil {
 			return fmt.Errorf("failed to build dependency graph: %w", err)
+		}
+
+		// Apply level filtering if --file flag is provided
+		if targetFile != "" {
+			// Resolve the target file to absolute path
+			absTargetFile, err := filepath.Abs(targetFile)
+			if err != nil {
+				return fmt.Errorf("failed to resolve file path: %w", err)
+			}
+
+			// Verify the target file exists in the graph
+			if _, ok := graph[absTargetFile]; !ok {
+				return fmt.Errorf("file not found in graph: %s", targetFile)
+			}
+
+			// Filter graph to only include nodes within the specified level
+			graph = filterGraphByLevel(graph, absTargetFile, depthLevel)
+
+			// Update filePaths to match filtered graph for accurate file count
+			filePaths = make([]string, 0, len(graph))
+			for f := range graph {
+				filePaths = append(filePaths, f)
+			}
 		}
 
 		// Apply path filtering if --between flag is provided
@@ -298,6 +348,10 @@ func init() {
 	GraphCmd.Flags().StringSliceVarP(&betweenFiles, "between", "w", nil, "Find all paths between specified files (comma-separated)")
 	// Add clipboard flag for copying output to clipboard
 	GraphCmd.Flags().BoolVarP(&copyToClipboard, "clipboard", "b", false, "Automatically copy output to clipboard")
+	// Add file flag for showing dependencies of a specific file
+	GraphCmd.Flags().StringVarP(&targetFile, "file", "p", "", "Show dependencies for a specific file")
+	// Add level flag for limiting dependency depth
+	GraphCmd.Flags().IntVarP(&depthLevel, "level", "l", 1, "Depth level for dependencies (used with --file)")
 }
 
 // supportedExtensions contains file extensions that the graph command can analyze
@@ -369,4 +423,59 @@ func resolveAndValidatePaths(paths []string, graph parsers.DependencyGraph) (res
 		}
 	}
 	return
+}
+
+// filterGraphByLevel filters the dependency graph to include only nodes within
+// the specified number of levels from the target file. It includes both direct
+// dependencies (files the target imports) and reverse dependencies (files that
+// import the target).
+func filterGraphByLevel(graph parsers.DependencyGraph, targetFile string, level int) parsers.DependencyGraph {
+	// Build reverse adjacency map (who depends on this file)
+	reverseDeps := make(map[string][]string)
+	for file, deps := range graph {
+		for _, dep := range deps {
+			reverseDeps[dep] = append(reverseDeps[dep], file)
+		}
+	}
+
+	// BFS to find all nodes within the specified level
+	visited := make(map[string]bool)
+	visited[targetFile] = true
+
+	currentLevel := []string{targetFile}
+	for l := 0; l < level && len(currentLevel) > 0; l++ {
+		nextLevel := []string{}
+		for _, file := range currentLevel {
+			// Add direct dependencies (files this file imports)
+			for _, dep := range graph[file] {
+				if !visited[dep] {
+					visited[dep] = true
+					nextLevel = append(nextLevel, dep)
+				}
+			}
+			// Add reverse dependencies (files that import this file)
+			for _, revDep := range reverseDeps[file] {
+				if !visited[revDep] {
+					visited[revDep] = true
+					nextLevel = append(nextLevel, revDep)
+				}
+			}
+		}
+		currentLevel = nextLevel
+	}
+
+	// Build filtered graph with only visited nodes
+	filtered := make(parsers.DependencyGraph)
+	for file := range visited {
+		// Only include edges where both source and target are in the filtered set
+		var filteredDeps []string
+		for _, dep := range graph[file] {
+			if visited[dep] {
+				filteredDeps = append(filteredDeps, dep)
+			}
+		}
+		filtered[file] = filteredDeps
+	}
+
+	return filtered
 }
