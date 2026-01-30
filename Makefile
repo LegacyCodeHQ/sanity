@@ -39,9 +39,9 @@ test:
 lint:
 	golangci-lint run ./...
 
-# Run tests with coverage percentage
+# Run tests with coverage percentage (excludes cmd packages which have no tests)
 test-coverage:
-	go test -cover ./...
+	@go list ./... | grep -Ev '/cmd($$|/)' | xargs go test -cover
 
 # Generate coverage profile (exclude cmd packages as they have no tests)
 coverage:
