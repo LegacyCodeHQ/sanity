@@ -1,4 +1,4 @@
-.PHONY: test test-coverage coverage coverage-html clean help build build-version build-local release-snapshot release-check
+.PHONY: test test-coverage coverage coverage-html clean help build build-version build-local release-snapshot release-check lint
 
 # Version information (can be overridden via command line)
 # Try to get version from git tag, otherwise use "dev"
@@ -19,6 +19,7 @@ help:
 	@echo "  test-coverage    - Run tests with coverage percentage"
 	@echo "  coverage         - Generate coverage profile (coverage.out)"
 	@echo "  coverage-html    - Generate HTML coverage report (coverage.html)"
+	@echo "  lint             - Run golangci-lint"
 	@echo ""
 	@echo "Building:"
 	@echo "  build            - Build the binary (default version: dev)"
@@ -36,6 +37,10 @@ help:
 # Run all tests
 test:
 	go test ./...
+
+# Run linter
+lint:
+	golangci-lint run ./...
 
 # Run tests with coverage percentage (exclude cmd packages as they have no tests)
 test-coverage:
