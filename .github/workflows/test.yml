@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         # Test against recent Go versions for compatibility
-        go-version: [ '1.21', '1.25' ]
+        go-version: [ '1.21', '1.24', '1.25' ]
     
     steps:
       - name: Checkout code
@@ -26,11 +26,10 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Run golangci-lint
-        if: matrix.go-version == '1.21'
+        if: matrix.go-version != '1.25' # the linter is not built for golang 1.25
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
-          args: --go=1.24
 
       - name: Download dependencies
         run: go mod download
