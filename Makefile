@@ -1,4 +1,4 @@
-.PHONY: test test-coverage coverage coverage-html clean help build-local release-snapshot release-check lint
+.PHONY: test test-coverage coverage coverage-html clean help build-dev release-snapshot release-check lint
 
 # Version information (can be overridden via command line)
 # Try to get version from git tag, otherwise use "dev"
@@ -22,7 +22,7 @@ help:
 	@echo "  lint             - Run golangci-lint"
 	@echo ""
 	@echo "Building:"
-	@echo "  build-local      - Build for current platform with CGO"
+	@echo "  build-dev      - Build for current platform with CGO"
 	@echo ""
 	@echo "Releasing:"
 	@echo "  release-snapshot - GoReleaser build for current platform only"
@@ -85,7 +85,7 @@ release-check:
 
 # Build for current platform only (RECOMMENDED for local testing)
 # No cross-compilation, no GoReleaser, no Zig required
-build-local:
+build-dev:
 	@echo "Building for current platform with version: $(VERSION), commit: $(COMMIT)"
 	CGO_ENABLED=1 go build -ldflags "-s -w -X github.com/LegacyCodeHQ/sanity/cmd.version=$(VERSION) -X github.com/LegacyCodeHQ/sanity/cmd.buildDate=$(BUILD_DATE) -X github.com/LegacyCodeHQ/sanity/cmd.commit=$(COMMIT)" -o sanity ./main.go
 	@echo ""
