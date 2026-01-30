@@ -33,8 +33,6 @@ func (p ProjectImport) URI() string {
 	return p.uri
 }
 
-func (p ProjectImport) isImport() {}
-
 func classifyImport(uri string) Import {
 	if strings.HasPrefix(uri, "dart:") || strings.HasPrefix(uri, "package:") {
 		return PackageImport{uri: uri}

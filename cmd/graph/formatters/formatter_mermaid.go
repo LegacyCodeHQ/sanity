@@ -39,12 +39,6 @@ func (f *MermaidFormatter) Format(g parsers.DependencyGraph, opts FormatOptions)
 		}
 	}
 
-	// Collect all file paths from the graph to determine extension colors
-	filePaths := make([]string, 0, len(g))
-	for source := range g {
-		filePaths = append(filePaths, source)
-	}
-
 	// Count files by extension to find the majority extension
 	extensionCounts := make(map[string]int)
 	for source := range g {

@@ -268,22 +268,6 @@ func queryKotlinImports(rootNode *sitter.Node, sourceCode []byte, pattern string
 	return imports, nil
 }
 
-// parseImportPath extracts the import path and checks for wildcard
-func parseImportPath(raw string) (path string, isWildcard bool) {
-	cleaned := strings.TrimSpace(raw)
-
-	// Remove any "import" keyword if present
-	cleaned = strings.TrimPrefix(cleaned, "import")
-	cleaned = strings.TrimSpace(cleaned)
-
-	// Check for wildcard suffix
-	if strings.HasSuffix(cleaned, ".*") {
-		return strings.TrimSuffix(cleaned, ".*"), true
-	}
-
-	return cleaned, false
-}
-
 // extractImportFromFullText extracts the import path from a full import statement
 func extractImportFromFullText(text string) string {
 	// Match pattern: import <path> [as <alias>]
