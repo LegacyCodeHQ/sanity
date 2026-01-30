@@ -17,7 +17,12 @@ type Formatter interface {
 
 // NewFormatter creates a Formatter for the specified format type.
 func NewFormatter(format string) (Formatter, error) {
-	switch OutputFormat(format) {
+	f, ok := ParseOutputFormat(format)
+	if !ok {
+		return nil, fmt.Errorf("unknown format: %s (valid options: dot, json, mermaid)", format)
+	}
+
+	switch f {
 	case OutputFormatDOT:
 		return &DOTFormatter{}, nil
 	case OutputFormatJSON:

@@ -167,7 +167,7 @@ Examples:
 
 		// Get file statistics for DOT/Mermaid formats
 		var fileStats map[string]vcs.FileStats
-		format := formatters.OutputFormat(outputFormat)
+		format, _ := formatters.ParseOutputFormat(outputFormat)
 		if (format == formatters.OutputFormatDOT || format == formatters.OutputFormatMermaid) && repoPath != "" {
 			if commitID != "" {
 				if isCommitRange {
