@@ -440,7 +440,7 @@ go 1.25
 	err := os.WriteFile(goModPath, []byte(goModContent), 0644)
 	require.NoError(t, err)
 
-	// Create types.go with type definitions
+	// Create output_format.go with type definitions
 	typesContent := `package main
 
 type User struct {
@@ -451,7 +451,7 @@ type Product struct {
 	Title string
 }
 `
-	typesPath := filepath.Join(tmpDir, "types.go")
+	typesPath := filepath.Join(tmpDir, "output_format.go")
 	err = os.WriteFile(typesPath, []byte(typesContent), 0644)
 	require.NoError(t, err)
 
@@ -490,22 +490,22 @@ func main() {
 	require.NoError(t, err)
 	assert.Len(t, graph, 3)
 
-	// Check main.go dependencies (should depend on both types.go and helpers.go)
-	// because it uses User and Product from types.go, and FormatUser from helpers.go
+	// Check main.go dependencies (should depend on both output_format.go and helpers.go)
+	// because it uses User and Product from output_format.go, and FormatUser from helpers.go
 	mainDeps := graph[mainPath]
-	assert.Len(t, mainDeps, 2, "main.go should depend on both types.go and helpers.go")
+	assert.Len(t, mainDeps, 2, "main.go should depend on both output_format.go and helpers.go")
 	assert.Contains(t, mainDeps, typesPath, "main.go uses User and Product")
 	assert.Contains(t, mainDeps, helpersPath, "main.go uses FormatUser")
 
-	// Check helpers.go dependencies (should depend on types.go)
+	// Check helpers.go dependencies (should depend on output_format.go)
 	// because it uses User type
 	helpersDeps := graph[helpersPath]
-	assert.Len(t, helpersDeps, 1, "helpers.go should depend on types.go")
+	assert.Len(t, helpersDeps, 1, "helpers.go should depend on output_format.go")
 	assert.Contains(t, helpersDeps, typesPath, "helpers.go uses User type")
 
-	// Check types.go dependencies (should have none)
+	// Check output_format.go dependencies (should have none)
 	typesDeps := graph[typesPath]
-	assert.Empty(t, typesDeps, "types.go has no dependencies")
+	assert.Empty(t, typesDeps, "output_format.go has no dependencies")
 }
 
 func TestBuildDependencyGraph_KotlinFiles(t *testing.T) {

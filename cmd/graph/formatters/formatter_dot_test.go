@@ -110,13 +110,13 @@ func TestDependencyGraph_ToDOT_TestFilesAreLightGreen_Dart(t *testing.T) {
 func TestDependencyGraph_ToDOT_MajorityExtensionIsWhite(t *testing.T) {
 	// Create graph with majority .go files (5 files) and minority .dart files (2 files)
 	graph := parsers.DependencyGraph{
-		"/project/main.go":    {"/project/utils.go"},
-		"/project/utils.go":   {},
-		"/project/types.go":   {},
-		"/project/helpers.go": {},
-		"/project/config.go":  {},
-		"/project/main.dart":  {},
-		"/project/utils.dart": {},
+		"/project/main.go":          {"/project/utils.go"},
+		"/project/utils.go":         {},
+		"/project/output_format.go": {},
+		"/project/helpers.go":       {},
+		"/project/config.go":        {},
+		"/project/main.dart":        {},
+		"/project/utils.dart":       {},
 	}
 
 	formatter := &formatters.DOTFormatter{}
@@ -126,7 +126,7 @@ func TestDependencyGraph_ToDOT_MajorityExtensionIsWhite(t *testing.T) {
 	// All .go files (majority extension) should be white
 	assert.Contains(t, dot, `"main.go" [label="main.go", style=filled, fillcolor=white]`)
 	assert.Contains(t, dot, `"utils.go" [label="utils.go", style=filled, fillcolor=white]`)
-	assert.Contains(t, dot, `"types.go" [label="types.go", style=filled, fillcolor=white]`)
+	assert.Contains(t, dot, `"output_format.go" [label="output_format.go", style=filled, fillcolor=white]`)
 	assert.Contains(t, dot, `"helpers.go" [label="helpers.go", style=filled, fillcolor=white]`)
 	assert.Contains(t, dot, `"config.go" [label="config.go", style=filled, fillcolor=white]`)
 
@@ -142,12 +142,12 @@ func TestDependencyGraph_ToDOT_MajorityExtensionIsWhite(t *testing.T) {
 func TestDependencyGraph_ToDOT_MajorityExtensionIsWhite_WithTestFiles(t *testing.T) {
 	// Test that test files are light green even if they're part of majority extension
 	graph := parsers.DependencyGraph{
-		"/project/main.go":       {"/project/utils.go"},
-		"/project/utils.go":      {},
-		"/project/types.go":      {},
-		"/project/main_test.go":  {"/project/main.go"},
-		"/project/utils_test.go": {"/project/utils.go"},
-		"/project/main.dart":     {},
+		"/project/main.go":          {"/project/utils.go"},
+		"/project/utils.go":         {},
+		"/project/output_format.go": {},
+		"/project/main_test.go":     {"/project/main.go"},
+		"/project/utils_test.go":    {"/project/utils.go"},
+		"/project/main.dart":        {},
 	}
 
 	formatter := &formatters.DOTFormatter{}
@@ -161,7 +161,7 @@ func TestDependencyGraph_ToDOT_MajorityExtensionIsWhite_WithTestFiles(t *testing
 	// Non-test .go files (majority extension) should be white
 	assert.Contains(t, dot, `"main.go" [label="main.go", style=filled, fillcolor=white]`)
 	assert.Contains(t, dot, `"utils.go" [label="utils.go", style=filled, fillcolor=white]`)
-	assert.Contains(t, dot, `"types.go" [label="types.go", style=filled, fillcolor=white]`)
+	assert.Contains(t, dot, `"output_format.go" [label="output_format.go", style=filled, fillcolor=white]`)
 
 	// .dart file (minority extension) should not be white
 	assert.Contains(t, dot, "main.dart")
@@ -195,9 +195,9 @@ func TestDependencyGraph_ToDOT_MajorityExtensionTie(t *testing.T) {
 func TestDependencyGraph_ToDOT_SingleExtensionAllWhite(t *testing.T) {
 	// When all files have the same extension, they should all be white
 	graph := parsers.DependencyGraph{
-		"/project/main.go":  {"/project/utils.go"},
-		"/project/utils.go": {},
-		"/project/types.go": {},
+		"/project/main.go":          {"/project/utils.go"},
+		"/project/utils.go":         {},
+		"/project/output_format.go": {},
 	}
 
 	formatter := &formatters.DOTFormatter{}
@@ -207,7 +207,7 @@ func TestDependencyGraph_ToDOT_SingleExtensionAllWhite(t *testing.T) {
 	// All files should be white (single extension)
 	assert.Contains(t, dot, `"main.go" [label="main.go", style=filled, fillcolor=white]`)
 	assert.Contains(t, dot, `"utils.go" [label="utils.go", style=filled, fillcolor=white]`)
-	assert.Contains(t, dot, `"types.go" [label="types.go", style=filled, fillcolor=white]`)
+	assert.Contains(t, dot, `"output_format.go" [label="output_format.go", style=filled, fillcolor=white]`)
 }
 
 func TestDependencyGraph_ToDOT_TypeScriptTestFiles(t *testing.T) {

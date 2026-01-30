@@ -62,7 +62,7 @@ func TestGetExtensionColors_SameExtensionMultipleFiles(t *testing.T) {
 	fileNames := []string{
 		"main.go",
 		"utils.go",
-		"types.go",
+		"output_format.go",
 		"helpers.go",
 	}
 
