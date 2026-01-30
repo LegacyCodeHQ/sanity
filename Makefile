@@ -15,11 +15,11 @@ help:
 	@echo "Available targets:"
 	@echo ""
 	@echo "Testing:"
+	@echo "  lint             - Run golangci-lint"
 	@echo "  test             - Run all tests"
 	@echo "  test-coverage    - Run tests with coverage percentage"
 	@echo "  coverage         - Generate coverage profile (coverage.out)"
 	@echo "  coverage-html    - Generate HTML coverage report (coverage.html)"
-	@echo "  lint             - Run golangci-lint"
 	@echo ""
 	@echo "Building:"
 	@echo "  build-dev      - Build for current platform with CGO"
@@ -39,12 +39,8 @@ test:
 lint:
 	golangci-lint run ./...
 
-# Run tests with coverage percentage (exclude cmd packages as they have no tests)
+# Run tests with coverage percentage
 test-coverage:
-	@go list ./... | grep -Ev '/cmd($$|/)' | xargs go test -cover
-
-# Alternative: test all packages including cmd (may fail on Go 1.25+)
-test-coverage-all:
 	go test -cover ./...
 
 # Generate coverage profile (exclude cmd packages as they have no tests)
