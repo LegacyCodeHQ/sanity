@@ -60,7 +60,7 @@ Requires Go 1.21+ and CGO enabled:
 ```bash
 git clone https://github.com/LegacyCodeHQ/sanity.git
 cd sanity
-make build-local
+make build-dev
 sudo mv sanity /usr/local/bin/
 ```
 
