@@ -160,10 +160,7 @@ Examples:
 		// Create the appropriate content reader based on whether we're analyzing a commit
 		var contentReader vcs.ContentReader
 		if toCommit != "" {
-			contentReader = func(absPath string) ([]byte, error) {
-				relPath := parsers.GetRelativePath(absPath, repoPath)
-				return vcs.GetFileContentFromCommit(repoPath, toCommit, relPath)
-			}
+			contentReader = vcs.GitCommitContentReader(repoPath, toCommit)
 		} else {
 			contentReader = vcs.FilesystemContentReader()
 		}
