@@ -6,11 +6,9 @@ import (
 	"go/token"
 	"path/filepath"
 	"strings"
-)
 
-// ContentReader is a function that reads file content given a file path.
-// This allows the caller to control how files are read (filesystem, git, etc.)
-type ContentReader func(filePath string) ([]byte, error)
+	"github.com/LegacyCodeHQ/sanity/vcs"
+)
 
 // GoSymbolInfo tracks symbols defined and referenced in a Go file
 type GoSymbolInfo struct {
@@ -22,11 +20,11 @@ type GoSymbolInfo struct {
 
 // GoExportInfo tracks exported symbols and import usage in a Go file
 type GoExportInfo struct {
-	FilePath         string
-	Package          string
-	Exports          map[string]bool            // Exported symbols (capitalized) defined in this file
-	ImportAliases    map[string]string          // Maps import path to alias used (or package name if no alias)
-	QualifiedRefs    map[string]map[string]bool // Maps package alias -> set of symbols accessed
+	FilePath      string
+	Package       string
+	Exports       map[string]bool            // Exported symbols (capitalized) defined in this file
+	ImportAliases map[string]string          // Maps import path to alias used (or package name if no alias)
+	QualifiedRefs map[string]map[string]bool // Maps package alias -> set of symbols accessed
 }
 
 // GoPackageExportIndex maps exported symbols to their defining files within a package directory
@@ -254,7 +252,7 @@ func extractExportInfoFromAST(filePath string, node *ast.File) (*GoExportInfo, e
 // BuildPackageExportIndex builds an index of exported symbols for files in a package directory.
 // The contentReader function is used to read file contents, allowing the caller to control
 // whether files are read from the filesystem, a git commit, or another source.
-func BuildPackageExportIndex(filePaths []string, contentReader ContentReader) (GoPackageExportIndex, error) {
+func BuildPackageExportIndex(filePaths []string, contentReader vcs.ContentReader) (GoPackageExportIndex, error) {
 	index := make(GoPackageExportIndex)
 
 	for _, filePath := range filePaths {
@@ -295,7 +293,7 @@ func GetUsedSymbolsFromPackage(exportInfo *GoExportInfo, importPath string) map[
 // BuildIntraPackageDependencies builds dependencies between files in the same Go package.
 // The contentReader function is used to read file contents, allowing the caller to control
 // whether files are read from the filesystem, a git commit, or another source.
-func BuildIntraPackageDependencies(filePaths []string, contentReader ContentReader) (map[string][]string, error) {
+func BuildIntraPackageDependencies(filePaths []string, contentReader vcs.ContentReader) (map[string][]string, error) {
 	// Group files by package
 	packageFiles := make(map[string][]string)
 	for _, filePath := range filePaths {

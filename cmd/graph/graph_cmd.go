@@ -158,7 +158,7 @@ Examples:
 
 		// Build the dependency graph
 		// Create the appropriate content reader based on whether we're analyzing a commit
-		var contentReader parsers.ContentReader
+		var contentReader vcs.ContentReader
 		if toCommit != "" {
 			contentReader = func(absPath string) ([]byte, error) {
 				relPath := parsers.GetRelativePath(absPath, repoPath)

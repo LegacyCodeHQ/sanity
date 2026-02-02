@@ -11,14 +11,11 @@ import (
 	_go "github.com/LegacyCodeHQ/sanity/parsers/go"
 	"github.com/LegacyCodeHQ/sanity/parsers/kotlin"
 	"github.com/LegacyCodeHQ/sanity/parsers/typescript"
+	"github.com/LegacyCodeHQ/sanity/vcs"
 )
 
-// ContentReader is a function that reads file content given an absolute path.
-// This abstracts the source of file content (filesystem, git commit, etc.)
-type ContentReader func(absPath string) ([]byte, error)
-
 // FilesystemContentReader returns a ContentReader that reads from the filesystem.
-func FilesystemContentReader() ContentReader {
+func FilesystemContentReader() vcs.ContentReader {
 	return func(absPath string) ([]byte, error) {
 		return os.ReadFile(absPath)
 	}
@@ -29,7 +26,7 @@ func FilesystemContentReader() ContentReader {
 // and standard library/external imports for Go).
 // Only dependencies that are in the supplied file list are included in the graph.
 // The contentReader function is used to read file contents (from filesystem, git commit, etc.)
-func BuildDependencyGraph(filePaths []string, contentReader ContentReader) (DependencyGraph, error) {
+func BuildDependencyGraph(filePaths []string, contentReader vcs.ContentReader) (DependencyGraph, error) {
 	graph := make(DependencyGraph)
 
 	// First pass: build a set of all supplied file paths (as absolute paths)
@@ -75,7 +72,7 @@ func BuildDependencyGraph(filePaths []string, contentReader ContentReader) (Depe
 			}
 		}
 		if hasGoFiles {
-			exportIndex, err := _go.BuildPackageExportIndex(goFilesInDir, _go.ContentReader(contentReader))
+			exportIndex, err := _go.BuildPackageExportIndex(goFilesInDir, vcs.ContentReader(contentReader))
 			if err == nil {
 				goPackageExportIndices[dir] = exportIndex
 			}
@@ -312,7 +309,7 @@ func BuildDependencyGraph(filePaths []string, contentReader ContentReader) (Depe
 	// Note: goFiles was already collected in the first pass
 
 	if len(goFiles) > 0 {
-		intraDeps, err := _go.BuildIntraPackageDependencies(goFiles, _go.ContentReader(contentReader))
+		intraDeps, err := _go.BuildIntraPackageDependencies(goFiles, vcs.ContentReader(contentReader))
 		if err != nil {
 			// Don't fail if intra-package analysis fails, just skip it
 			return graph, nil
@@ -361,7 +358,7 @@ func resolveImportPath(sourceFile, importURI, fileExt string) string {
 
 // resolveGoImportPath resolves a Go import path to an absolute file path
 // The contentReader is used to read go.mod content
-func resolveGoImportPath(sourceFile, importPath string, contentReader ContentReader) string {
+func resolveGoImportPath(sourceFile, importPath string, contentReader vcs.ContentReader) string {
 	// For Go files, we need to find the module root and resolve the import
 	// This is a simplified version that assumes the project follows standard Go module structure
 
@@ -415,7 +412,7 @@ func findModuleRoot(startDir string) string {
 }
 
 // getModuleName reads the module name from go.mod using the content reader
-func getModuleName(moduleRoot string, contentReader ContentReader) string {
+func getModuleName(moduleRoot string, contentReader vcs.ContentReader) string {
 	goModPath := filepath.Join(moduleRoot, "go.mod")
 	content, err := contentReader(goModPath)
 	if err != nil {
@@ -459,7 +456,7 @@ func GetRelativePath(absPath, repoPath string) string {
 }
 
 // buildKotlinPackageIndex builds maps describing available Kotlin packages and their type declarations
-func buildKotlinPackageIndex(filePaths []string, contentReader ContentReader) (map[string][]string, map[string]map[string][]string) {
+func buildKotlinPackageIndex(filePaths []string, contentReader vcs.ContentReader) (map[string][]string, map[string]map[string][]string) {
 	packageToFiles := make(map[string][]string)
 	packageToTypes := make(map[string]map[string][]string)
 
@@ -552,7 +549,7 @@ func resolveKotlinImportPath(
 // resolveKotlinSamePackageDependencies finds Kotlin dependencies that are referenced without imports (same-package references)
 func resolveKotlinSamePackageDependencies(
 	sourceFile string,
-	contentReader ContentReader,
+	contentReader vcs.ContentReader,
 	filePackages map[string]string,
 	packageTypeIndex map[string]map[string][]string,
 	imports []kotlin.KotlinImport,
