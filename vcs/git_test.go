@@ -2,12 +2,15 @@ package vcs
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
+	"github.com/sebdah/goldie/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -79,25 +82,61 @@ func modifyFile(t *testing.T, filePath string) {
 	require.NoError(t, err, "failed to modify file %s", filePath)
 }
 
+// gitGoldie creates a goldie instance for git tests
+func gitGoldie(t *testing.T) *goldie.Goldie {
+	return goldie.New(t, goldie.WithNameSuffix(".gold.txt"))
+}
+
+// normalizeFilePaths normalizes file paths for golden file comparison
+// by replacing the temp directory with $REPO placeholder
+func normalizeFilePaths(tmpDir string, paths []string) string {
+	if len(paths) == 0 {
+		return "(empty)"
+	}
+	resolvedTmpDir, _ := filepath.EvalSymlinks(tmpDir)
+	var normalized []string
+	for _, p := range paths {
+		relPath := strings.TrimPrefix(p, resolvedTmpDir+"/")
+		normalized = append(normalized, "$REPO/"+relPath)
+	}
+	sort.Strings(normalized)
+	return strings.Join(normalized, "\n")
+}
+
+// normalizeFileStats normalizes file stats for golden file comparison
+func normalizeFileStats(tmpDir string, stats map[string]FileStats) string {
+	if len(stats) == 0 {
+		return "(empty)"
+	}
+	resolvedTmpDir, _ := filepath.EvalSymlinks(tmpDir)
+	var keys []string
+	for k := range stats {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var lines []string
+	for _, k := range keys {
+		stat := stats[k]
+		relPath := strings.TrimPrefix(k, resolvedTmpDir+"/")
+		lines = append(lines, fmt.Sprintf("$REPO/%s: +%d -%d new=%t", relPath, stat.Additions, stat.Deletions, stat.IsNew))
+	}
+	return strings.Join(lines, "\n")
+}
+
 func TestGetUncommittedDartFiles_UntrackedFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
 
 	// Create untracked .dart files
-	dartFile1 := createDartFile(t, tmpDir, "test1.dart")
-	dartFile2 := createDartFile(t, tmpDir, "test2.dart")
+	createDartFile(t, tmpDir, "test1.dart")
+	createDartFile(t, tmpDir, "test2.dart")
 
 	// Get uncommitted files
 	files, err := GetUncommittedDartFiles(tmpDir)
 
 	require.NoError(t, err)
-	assert.Len(t, files, 2)
-
-	// Resolve symlinks for comparison (macOS /var -> /private/var)
-	resolved1, _ := filepath.EvalSymlinks(dartFile1)
-	resolved2, _ := filepath.EvalSymlinks(dartFile2)
-	assert.Contains(t, files, resolved1)
-	assert.Contains(t, files, resolved2)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetUncommittedDartFiles_UntrackedFilesInSubdirectory(t *testing.T) {
@@ -110,20 +149,15 @@ func TestGetUncommittedDartFiles_UntrackedFilesInSubdirectory(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create untracked files in subdirectory
-	dartFile1 := createDartFile(t, subDir, "test1.dart")
-	dartFile2 := createDartFile(t, subDir, "test2.dart")
+	createDartFile(t, subDir, "test1.dart")
+	createDartFile(t, subDir, "test2.dart")
 
 	// Get uncommitted files
 	files, err := GetUncommittedDartFiles(tmpDir)
 
 	require.NoError(t, err)
-	assert.Len(t, files, 2, "should find individual files in subdirectory, not just directory name")
-
-	// Resolve symlinks for comparison (macOS /var -> /private/var)
-	resolved1, _ := filepath.EvalSymlinks(dartFile1)
-	resolved2, _ := filepath.EvalSymlinks(dartFile2)
-	assert.Contains(t, files, resolved1)
-	assert.Contains(t, files, resolved2)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetUncommittedDartFiles_StagedFiles(t *testing.T) {
@@ -131,16 +165,15 @@ func TestGetUncommittedDartFiles_StagedFiles(t *testing.T) {
 	setupGitRepo(t, tmpDir)
 
 	// Create and stage .dart files
-	dartFile := createDartFile(t, tmpDir, "test.dart")
+	createDartFile(t, tmpDir, "test.dart")
 	gitAdd(t, tmpDir, "test.dart")
 
 	// Get uncommitted files
 	files, err := GetUncommittedDartFiles(tmpDir)
 
 	require.NoError(t, err)
-	assert.Len(t, files, 1)
-	resolved, _ := filepath.EvalSymlinks(dartFile)
-	assert.Contains(t, files, resolved)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetUncommittedDartFiles_ModifiedFiles(t *testing.T) {
@@ -159,9 +192,8 @@ func TestGetUncommittedDartFiles_ModifiedFiles(t *testing.T) {
 	files, err := GetUncommittedDartFiles(tmpDir)
 
 	require.NoError(t, err)
-	assert.Len(t, files, 1)
-	resolved, _ := filepath.EvalSymlinks(dartFile)
-	assert.Contains(t, files, resolved)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetUncommittedDartFiles_MixedStates(t *testing.T) {
@@ -174,11 +206,11 @@ func TestGetUncommittedDartFiles_MixedStates(t *testing.T) {
 	gitCommit(t, tmpDir, "Initial commit")
 
 	// Create a staged file
-	stagedFile := createDartFile(t, tmpDir, "staged.dart")
+	createDartFile(t, tmpDir, "staged.dart")
 	gitAdd(t, tmpDir, "staged.dart")
 
 	// Create an untracked file
-	untrackedFile := createDartFile(t, tmpDir, "untracked.dart")
+	createDartFile(t, tmpDir, "untracked.dart")
 
 	// Modify the committed file
 	modifyFile(t, committedFile)
@@ -187,13 +219,8 @@ func TestGetUncommittedDartFiles_MixedStates(t *testing.T) {
 	files, err := GetUncommittedDartFiles(tmpDir)
 
 	require.NoError(t, err)
-	assert.Len(t, files, 3)
-	resolved1, _ := filepath.EvalSymlinks(committedFile)
-	resolved2, _ := filepath.EvalSymlinks(stagedFile)
-	resolved3, _ := filepath.EvalSymlinks(untrackedFile)
-	assert.Contains(t, files, resolved1) // modified
-	assert.Contains(t, files, resolved2) // staged
-	assert.Contains(t, files, resolved3) // untracked
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetUncommittedDartFiles_IncludesAllFiles(t *testing.T) {
@@ -201,24 +228,17 @@ func TestGetUncommittedDartFiles_IncludesAllFiles(t *testing.T) {
 	setupGitRepo(t, tmpDir)
 
 	// Create various file types
-	dartFile := createDartFile(t, tmpDir, "test.dart")
-	goFile := createFile(t, tmpDir, "test.go", "package main")
-	mdFile := createFile(t, tmpDir, "README.md", "# Test")
-	txtFile := createFile(t, tmpDir, "test.txt", "text file")
+	createDartFile(t, tmpDir, "test.dart")
+	createFile(t, tmpDir, "test.go", "package main")
+	createFile(t, tmpDir, "README.md", "# Test")
+	createFile(t, tmpDir, "test.txt", "text file")
 
 	// Get uncommitted files
 	files, err := GetUncommittedDartFiles(tmpDir)
 
 	require.NoError(t, err)
-	assert.Len(t, files, 4, "should include all file types")
-	resolvedDart, _ := filepath.EvalSymlinks(dartFile)
-	resolvedGo, _ := filepath.EvalSymlinks(goFile)
-	resolvedMd, _ := filepath.EvalSymlinks(mdFile)
-	resolvedTxt, _ := filepath.EvalSymlinks(txtFile)
-	assert.Contains(t, files, resolvedDart)
-	assert.Contains(t, files, resolvedGo)
-	assert.Contains(t, files, resolvedMd)
-	assert.Contains(t, files, resolvedTxt)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetUncommittedDartFiles_NoUncommittedFiles(t *testing.T) {
@@ -234,7 +254,8 @@ func TestGetUncommittedDartFiles_NoUncommittedFiles(t *testing.T) {
 	files, err := GetUncommittedDartFiles(tmpDir)
 
 	require.NoError(t, err)
-	assert.Empty(t, files)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetUncommittedDartFiles_EmptyRepo(t *testing.T) {
@@ -245,7 +266,8 @@ func TestGetUncommittedDartFiles_EmptyRepo(t *testing.T) {
 	files, err := GetUncommittedDartFiles(tmpDir)
 
 	require.NoError(t, err)
-	assert.Empty(t, files)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetUncommittedDartFiles_NotGitRepo(t *testing.T) {
@@ -323,7 +345,7 @@ func TestGetCommitDartFiles_SingleCommit(t *testing.T) {
 	setupGitRepo(t, tmpDir)
 
 	// Create and commit .dart file
-	dartFile := createDartFile(t, tmpDir, "test.dart")
+	createDartFile(t, tmpDir, "test.dart")
 	gitAdd(t, tmpDir, "test.dart")
 	commitID := gitCommitAndGetSHA(t, tmpDir, "Add test.dart")
 
@@ -331,9 +353,8 @@ func TestGetCommitDartFiles_SingleCommit(t *testing.T) {
 	files, err := GetCommitDartFiles(tmpDir, commitID)
 
 	require.NoError(t, err)
-	assert.Len(t, files, 1)
-	resolved, _ := filepath.EvalSymlinks(dartFile)
-	assert.Contains(t, files, resolved)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetCommitDartFiles_MultipleFiles(t *testing.T) {
@@ -341,9 +362,9 @@ func TestGetCommitDartFiles_MultipleFiles(t *testing.T) {
 	setupGitRepo(t, tmpDir)
 
 	// Create and commit multiple .dart files
-	dartFile1 := createDartFile(t, tmpDir, "test1.dart")
-	dartFile2 := createDartFile(t, tmpDir, "test2.dart")
-	dartFile3 := createDartFile(t, tmpDir, "test3.dart")
+	createDartFile(t, tmpDir, "test1.dart")
+	createDartFile(t, tmpDir, "test2.dart")
+	createDartFile(t, tmpDir, "test3.dart")
 	gitAdd(t, tmpDir, "test1.dart")
 	gitAdd(t, tmpDir, "test2.dart")
 	gitAdd(t, tmpDir, "test3.dart")
@@ -353,13 +374,8 @@ func TestGetCommitDartFiles_MultipleFiles(t *testing.T) {
 	files, err := GetCommitDartFiles(tmpDir, commitID)
 
 	require.NoError(t, err)
-	assert.Len(t, files, 3)
-	resolved1, _ := filepath.EvalSymlinks(dartFile1)
-	resolved2, _ := filepath.EvalSymlinks(dartFile2)
-	resolved3, _ := filepath.EvalSymlinks(dartFile3)
-	assert.Contains(t, files, resolved1)
-	assert.Contains(t, files, resolved2)
-	assert.Contains(t, files, resolved3)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetCommitDartFiles_IncludesAllFiles(t *testing.T) {
@@ -367,9 +383,9 @@ func TestGetCommitDartFiles_IncludesAllFiles(t *testing.T) {
 	setupGitRepo(t, tmpDir)
 
 	// Create and commit various file types
-	dartFile := createDartFile(t, tmpDir, "test.dart")
-	goFile := createFile(t, tmpDir, "test.go", "package main")
-	mdFile := createFile(t, tmpDir, "README.md", "# Test")
+	createDartFile(t, tmpDir, "test.dart")
+	createFile(t, tmpDir, "test.go", "package main")
+	createFile(t, tmpDir, "README.md", "# Test")
 
 	gitAdd(t, tmpDir, "test.dart")
 	gitAdd(t, tmpDir, "test.go")
@@ -380,13 +396,8 @@ func TestGetCommitDartFiles_IncludesAllFiles(t *testing.T) {
 	files, err := GetCommitDartFiles(tmpDir, commitID)
 
 	require.NoError(t, err)
-	assert.Len(t, files, 3, "should include all file types")
-	resolvedDart, _ := filepath.EvalSymlinks(dartFile)
-	resolvedGo, _ := filepath.EvalSymlinks(goFile)
-	resolvedMd, _ := filepath.EvalSymlinks(mdFile)
-	assert.Contains(t, files, resolvedDart)
-	assert.Contains(t, files, resolvedGo)
-	assert.Contains(t, files, resolvedMd)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetCommitDartFiles_NonDartFiles(t *testing.T) {
@@ -394,7 +405,7 @@ func TestGetCommitDartFiles_NonDartFiles(t *testing.T) {
 	setupGitRepo(t, tmpDir)
 
 	// Create and commit non-.dart files
-	goFile := createFile(t, tmpDir, "test.go", "package main")
+	createFile(t, tmpDir, "test.go", "package main")
 	gitAdd(t, tmpDir, "test.go")
 	commitID := gitCommitAndGetSHA(t, tmpDir, "Add go file")
 
@@ -402,9 +413,8 @@ func TestGetCommitDartFiles_NonDartFiles(t *testing.T) {
 	files, err := GetCommitDartFiles(tmpDir, commitID)
 
 	require.NoError(t, err)
-	assert.Len(t, files, 1)
-	resolvedGo, _ := filepath.EvalSymlinks(goFile)
-	assert.Contains(t, files, resolvedGo)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetCommitDartFiles_InvalidCommit(t *testing.T) {
@@ -433,7 +443,7 @@ func TestGetCommitDartFiles_HeadReference(t *testing.T) {
 	gitCommit(t, tmpDir, "First commit")
 
 	// Create second commit with HEAD test
-	dartFile := createDartFile(t, tmpDir, "test.dart")
+	createDartFile(t, tmpDir, "test.dart")
 	gitAdd(t, tmpDir, "test.dart")
 	gitCommit(t, tmpDir, "Add test.dart")
 
@@ -441,9 +451,8 @@ func TestGetCommitDartFiles_HeadReference(t *testing.T) {
 	files, err := GetCommitDartFiles(tmpDir, "HEAD")
 
 	require.NoError(t, err)
-	assert.Len(t, files, 1)
-	resolved, _ := filepath.EvalSymlinks(dartFile)
-	assert.Contains(t, files, resolved)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetCommitDartFiles_HeadTildeReference(t *testing.T) {
@@ -451,7 +460,7 @@ func TestGetCommitDartFiles_HeadTildeReference(t *testing.T) {
 	setupGitRepo(t, tmpDir)
 
 	// Create first commit
-	dartFile1 := createDartFile(t, tmpDir, "first.dart")
+	createDartFile(t, tmpDir, "first.dart")
 	gitAdd(t, tmpDir, "first.dart")
 	gitCommit(t, tmpDir, "First commit")
 
@@ -464,9 +473,8 @@ func TestGetCommitDartFiles_HeadTildeReference(t *testing.T) {
 	files, err := GetCommitDartFiles(tmpDir, "HEAD~1")
 
 	require.NoError(t, err)
-	assert.Len(t, files, 1)
-	resolved, _ := filepath.EvalSymlinks(dartFile1)
-	assert.Contains(t, files, resolved)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetCommitDartFiles_NotGitRepo(t *testing.T) {
@@ -494,30 +502,18 @@ func TestGetUncommittedFileStats_MarksNewAndUntrackedFiles(t *testing.T) {
 	gitAdd(t, tmpDir, "committed.dart")
 	gitCommit(t, tmpDir, "Initial commit")
 
-	stagedFile := createDartFile(t, tmpDir, "staged.dart")
+	createDartFile(t, tmpDir, "staged.dart")
 	gitAdd(t, tmpDir, "staged.dart")
 
-	untrackedFile := createDartFile(t, tmpDir, "untracked.dart")
+	createDartFile(t, tmpDir, "untracked.dart")
 
 	modifyFile(t, committedFile)
 
 	stats, err := GetUncommittedFileStats(tmpDir)
 	require.NoError(t, err)
 
-	resolvedStaged, _ := filepath.EvalSymlinks(stagedFile)
-	stagedStats, ok := stats[resolvedStaged]
-	require.True(t, ok)
-	assert.True(t, stagedStats.IsNew)
-
-	resolvedUntracked, _ := filepath.EvalSymlinks(untrackedFile)
-	untrackedStats, ok := stats[resolvedUntracked]
-	require.True(t, ok)
-	assert.True(t, untrackedStats.IsNew)
-
-	resolvedCommitted, _ := filepath.EvalSymlinks(committedFile)
-	committedStats, ok := stats[resolvedCommitted]
-	require.True(t, ok)
-	assert.False(t, committedStats.IsNew)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFileStats(tmpDir, stats)))
 }
 
 func TestGetCommitFileStats_MarksNewFiles(t *testing.T) {
@@ -528,7 +524,7 @@ func TestGetCommitFileStats_MarksNewFiles(t *testing.T) {
 	gitAdd(t, tmpDir, "existing.dart")
 	gitCommit(t, tmpDir, "Initial commit")
 
-	addedFile := createDartFile(t, tmpDir, "added.dart")
+	createDartFile(t, tmpDir, "added.dart")
 	gitAdd(t, tmpDir, "added.dart")
 	modifyFile(t, existingFile)
 	gitAdd(t, tmpDir, "existing.dart")
@@ -537,15 +533,8 @@ func TestGetCommitFileStats_MarksNewFiles(t *testing.T) {
 	stats, err := GetCommitFileStats(tmpDir, commitID)
 	require.NoError(t, err)
 
-	resolvedAdded, _ := filepath.EvalSymlinks(addedFile)
-	addedStats, ok := stats[resolvedAdded]
-	require.True(t, ok)
-	assert.True(t, addedStats.IsNew)
-
-	resolvedExisting, _ := filepath.EvalSymlinks(existingFile)
-	existingStats, ok := stats[resolvedExisting]
-	require.True(t, ok)
-	assert.False(t, existingStats.IsNew)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFileStats(tmpDir, stats)))
 }
 
 // Tests for parseRenamedFilePath
@@ -1131,16 +1120,15 @@ func TestGetCommitRangeFiles_Success(t *testing.T) {
 	firstCommit := gitCommitAndGetSHA(t, tmpDir, "First commit")
 
 	// Create second commit with new file
-	newFile := createFile(t, tmpDir, "second.txt", "content")
+	createFile(t, tmpDir, "second.txt", "content")
 	gitAdd(t, tmpDir, "second.txt")
 	secondCommit := gitCommitAndGetSHA(t, tmpDir, "Second commit")
 
 	files, err := GetCommitRangeFiles(tmpDir, firstCommit, secondCommit)
 
 	require.NoError(t, err)
-	assert.Len(t, files, 1)
-	resolved, _ := filepath.EvalSymlinks(newFile)
-	assert.Contains(t, files, resolved)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetCommitRangeFiles_MultipleCommits(t *testing.T) {
@@ -1153,12 +1141,12 @@ func TestGetCommitRangeFiles_MultipleCommits(t *testing.T) {
 	firstCommit := gitCommitAndGetSHA(t, tmpDir, "First commit")
 
 	// Create second commit
-	file2 := createFile(t, tmpDir, "second.txt", "content")
+	createFile(t, tmpDir, "second.txt", "content")
 	gitAdd(t, tmpDir, "second.txt")
 	gitCommit(t, tmpDir, "Second commit")
 
 	// Create third commit
-	file3 := createFile(t, tmpDir, "third.txt", "content")
+	createFile(t, tmpDir, "third.txt", "content")
 	gitAdd(t, tmpDir, "third.txt")
 	thirdCommit := gitCommitAndGetSHA(t, tmpDir, "Third commit")
 
@@ -1166,11 +1154,8 @@ func TestGetCommitRangeFiles_MultipleCommits(t *testing.T) {
 	files, err := GetCommitRangeFiles(tmpDir, firstCommit, thirdCommit)
 
 	require.NoError(t, err)
-	assert.Len(t, files, 2)
-	resolved2, _ := filepath.EvalSymlinks(file2)
-	resolved3, _ := filepath.EvalSymlinks(file3)
-	assert.Contains(t, files, resolved2)
-	assert.Contains(t, files, resolved3)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetCommitRangeFiles_ModifiedFile(t *testing.T) {
@@ -1190,9 +1175,8 @@ func TestGetCommitRangeFiles_ModifiedFile(t *testing.T) {
 	files, err := GetCommitRangeFiles(tmpDir, firstCommit, secondCommit)
 
 	require.NoError(t, err)
-	assert.Len(t, files, 1)
-	resolved, _ := filepath.EvalSymlinks(file)
-	assert.Contains(t, files, resolved)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetCommitRangeFiles_ExcludesDeletedFiles(t *testing.T) {
@@ -1217,8 +1201,8 @@ func TestGetCommitRangeFiles_ExcludesDeletedFiles(t *testing.T) {
 	files, err := GetCommitRangeFiles(tmpDir, firstCommit, secondCommit)
 
 	require.NoError(t, err)
-	// Should not contain the deleted file
-	assert.Empty(t, files)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetCommitRangeFiles_NoChanges(t *testing.T) {
@@ -1233,7 +1217,8 @@ func TestGetCommitRangeFiles_NoChanges(t *testing.T) {
 	files, err := GetCommitRangeFiles(tmpDir, commit, commit)
 
 	require.NoError(t, err)
-	assert.Empty(t, files)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetCommitRangeFiles_InvalidFromCommit(t *testing.T) {
@@ -1287,7 +1272,7 @@ func TestGetCommitRangeFileStats_AdditionsAndDeletions(t *testing.T) {
 	setupGitRepo(t, tmpDir)
 
 	// Create first commit
-	file := createFile(t, tmpDir, "test.txt", "line1\nline2\nline3\n")
+	createFile(t, tmpDir, "test.txt", "line1\nline2\nline3\n")
 	gitAdd(t, tmpDir, "test.txt")
 	firstCommit := gitCommitAndGetSHA(t, tmpDir, "First commit")
 
@@ -1299,11 +1284,8 @@ func TestGetCommitRangeFileStats_AdditionsAndDeletions(t *testing.T) {
 	stats, err := GetCommitRangeFileStats(tmpDir, firstCommit, secondCommit)
 
 	require.NoError(t, err)
-	resolved, _ := filepath.EvalSymlinks(file)
-	fileStats, ok := stats[resolved]
-	require.True(t, ok)
-	assert.Equal(t, 2, fileStats.Additions)
-	assert.Equal(t, 1, fileStats.Deletions)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFileStats(tmpDir, stats)))
 }
 
 func TestGetCommitRangeFileStats_NewFile(t *testing.T) {
@@ -1316,19 +1298,15 @@ func TestGetCommitRangeFileStats_NewFile(t *testing.T) {
 	firstCommit := gitCommitAndGetSHA(t, tmpDir, "First commit")
 
 	// Add new file
-	newFile := createFile(t, tmpDir, "new.txt", "line1\nline2\n")
+	createFile(t, tmpDir, "new.txt", "line1\nline2\n")
 	gitAdd(t, tmpDir, "new.txt")
 	secondCommit := gitCommitAndGetSHA(t, tmpDir, "Second commit")
 
 	stats, err := GetCommitRangeFileStats(tmpDir, firstCommit, secondCommit)
 
 	require.NoError(t, err)
-	resolved, _ := filepath.EvalSymlinks(newFile)
-	fileStats, ok := stats[resolved]
-	require.True(t, ok)
-	assert.Equal(t, 2, fileStats.Additions)
-	assert.Equal(t, 0, fileStats.Deletions)
-	assert.True(t, fileStats.IsNew)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFileStats(tmpDir, stats)))
 }
 
 func TestGetCommitRangeFileStats_MultipleFiles(t *testing.T) {
@@ -1336,13 +1314,13 @@ func TestGetCommitRangeFileStats_MultipleFiles(t *testing.T) {
 	setupGitRepo(t, tmpDir)
 
 	// Create first commit
-	file1 := createFile(t, tmpDir, "file1.txt", "content")
+	createFile(t, tmpDir, "file1.txt", "content")
 	gitAdd(t, tmpDir, "file1.txt")
 	firstCommit := gitCommitAndGetSHA(t, tmpDir, "First commit")
 
 	// Modify and add new file
 	createFile(t, tmpDir, "file1.txt", "content\nnew line\n")
-	file2 := createFile(t, tmpDir, "file2.txt", "new file\n")
+	createFile(t, tmpDir, "file2.txt", "new file\n")
 	gitAdd(t, tmpDir, "file1.txt")
 	gitAdd(t, tmpDir, "file2.txt")
 	secondCommit := gitCommitAndGetSHA(t, tmpDir, "Second commit")
@@ -1350,14 +1328,8 @@ func TestGetCommitRangeFileStats_MultipleFiles(t *testing.T) {
 	stats, err := GetCommitRangeFileStats(tmpDir, firstCommit, secondCommit)
 
 	require.NoError(t, err)
-	assert.Len(t, stats, 2)
-
-	resolved1, _ := filepath.EvalSymlinks(file1)
-	resolved2, _ := filepath.EvalSymlinks(file2)
-	_, ok1 := stats[resolved1]
-	_, ok2 := stats[resolved2]
-	assert.True(t, ok1)
-	assert.True(t, ok2)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFileStats(tmpDir, stats)))
 }
 
 func TestGetCommitRangeFileStats_InvalidCommit(t *testing.T) {
@@ -1458,7 +1430,7 @@ func TestGetCommitTreeFiles_SingleFile(t *testing.T) {
 	setupGitRepo(t, tmpDir)
 
 	// Create and commit a file
-	file := createFile(t, tmpDir, "test.txt", "content")
+	createFile(t, tmpDir, "test.txt", "content")
 	gitAdd(t, tmpDir, "test.txt")
 	commitID := gitCommitAndGetSHA(t, tmpDir, "Initial commit")
 
@@ -1466,9 +1438,8 @@ func TestGetCommitTreeFiles_SingleFile(t *testing.T) {
 	files, err := GetCommitTreeFiles(tmpDir, commitID)
 
 	require.NoError(t, err)
-	assert.Len(t, files, 1)
-	resolved, _ := filepath.EvalSymlinks(file)
-	assert.Contains(t, files, resolved)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetCommitTreeFiles_MultipleFiles(t *testing.T) {
@@ -1476,9 +1447,9 @@ func TestGetCommitTreeFiles_MultipleFiles(t *testing.T) {
 	setupGitRepo(t, tmpDir)
 
 	// Create and commit multiple files
-	file1 := createFile(t, tmpDir, "file1.txt", "content1")
-	file2 := createFile(t, tmpDir, "file2.txt", "content2")
-	file3 := createFile(t, tmpDir, "file3.txt", "content3")
+	createFile(t, tmpDir, "file1.txt", "content1")
+	createFile(t, tmpDir, "file2.txt", "content2")
+	createFile(t, tmpDir, "file3.txt", "content3")
 	gitAdd(t, tmpDir, "file1.txt")
 	gitAdd(t, tmpDir, "file2.txt")
 	gitAdd(t, tmpDir, "file3.txt")
@@ -1487,13 +1458,8 @@ func TestGetCommitTreeFiles_MultipleFiles(t *testing.T) {
 	files, err := GetCommitTreeFiles(tmpDir, commitID)
 
 	require.NoError(t, err)
-	assert.Len(t, files, 3)
-	resolved1, _ := filepath.EvalSymlinks(file1)
-	resolved2, _ := filepath.EvalSymlinks(file2)
-	resolved3, _ := filepath.EvalSymlinks(file3)
-	assert.Contains(t, files, resolved1)
-	assert.Contains(t, files, resolved2)
-	assert.Contains(t, files, resolved3)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetCommitTreeFiles_FilesInSubdirectories(t *testing.T) {
@@ -1507,9 +1473,9 @@ func TestGetCommitTreeFiles_FilesInSubdirectories(t *testing.T) {
 	require.NoError(t, os.MkdirAll(srcDir, 0755))
 
 	// Create files in various locations
-	rootFile := createFile(t, tmpDir, "main.go", "package main")
-	libFile := createFile(t, libDir, "lib.go", "package lib")
-	srcFile := createFile(t, srcDir, "utils.go", "package utils")
+	createFile(t, tmpDir, "main.go", "package main")
+	createFile(t, libDir, "lib.go", "package lib")
+	createFile(t, srcDir, "utils.go", "package utils")
 
 	gitAdd(t, tmpDir, "main.go")
 	gitAdd(t, tmpDir, "lib/lib.go")
@@ -1519,20 +1485,15 @@ func TestGetCommitTreeFiles_FilesInSubdirectories(t *testing.T) {
 	files, err := GetCommitTreeFiles(tmpDir, commitID)
 
 	require.NoError(t, err)
-	assert.Len(t, files, 3)
-	resolvedRoot, _ := filepath.EvalSymlinks(rootFile)
-	resolvedLib, _ := filepath.EvalSymlinks(libFile)
-	resolvedSrc, _ := filepath.EvalSymlinks(srcFile)
-	assert.Contains(t, files, resolvedRoot)
-	assert.Contains(t, files, resolvedLib)
-	assert.Contains(t, files, resolvedSrc)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetCommitTreeFiles_HEAD(t *testing.T) {
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
 
-	file := createFile(t, tmpDir, "test.txt", "content")
+	createFile(t, tmpDir, "test.txt", "content")
 	gitAdd(t, tmpDir, "test.txt")
 	gitCommit(t, tmpDir, "Initial commit")
 
@@ -1540,9 +1501,8 @@ func TestGetCommitTreeFiles_HEAD(t *testing.T) {
 	files, err := GetCommitTreeFiles(tmpDir, "HEAD")
 
 	require.NoError(t, err)
-	assert.Len(t, files, 1)
-	resolved, _ := filepath.EvalSymlinks(file)
-	assert.Contains(t, files, resolved)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetCommitTreeFiles_OlderCommit(t *testing.T) {
@@ -1550,7 +1510,7 @@ func TestGetCommitTreeFiles_OlderCommit(t *testing.T) {
 	setupGitRepo(t, tmpDir)
 
 	// First commit with one file
-	file1 := createFile(t, tmpDir, "first.txt", "first content")
+	createFile(t, tmpDir, "first.txt", "first content")
 	gitAdd(t, tmpDir, "first.txt")
 	firstCommit := gitCommitAndGetSHA(t, tmpDir, "First commit")
 
@@ -1563,9 +1523,8 @@ func TestGetCommitTreeFiles_OlderCommit(t *testing.T) {
 	files, err := GetCommitTreeFiles(tmpDir, firstCommit)
 
 	require.NoError(t, err)
-	assert.Len(t, files, 1)
-	resolved1, _ := filepath.EvalSymlinks(file1)
-	assert.Contains(t, files, resolved1)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetCommitTreeFiles_AfterFileDeleted(t *testing.T) {
@@ -1573,15 +1532,11 @@ func TestGetCommitTreeFiles_AfterFileDeleted(t *testing.T) {
 	setupGitRepo(t, tmpDir)
 
 	// First commit with two files
-	file1 := createFile(t, tmpDir, "keep.txt", "keep")
+	createFile(t, tmpDir, "keep.txt", "keep")
 	file2 := createFile(t, tmpDir, "delete.txt", "delete")
 	gitAdd(t, tmpDir, "keep.txt")
 	gitAdd(t, tmpDir, "delete.txt")
 	firstCommit := gitCommitAndGetSHA(t, tmpDir, "Add two files")
-
-	// Resolve paths while files still exist
-	resolved1, _ := filepath.EvalSymlinks(file1)
-	resolved2, _ := filepath.EvalSymlinks(file2)
 
 	// Second commit deletes one file
 	require.NoError(t, os.Remove(file2))
@@ -1594,9 +1549,8 @@ func TestGetCommitTreeFiles_AfterFileDeleted(t *testing.T) {
 	files, err := GetCommitTreeFiles(tmpDir, firstCommit)
 
 	require.NoError(t, err)
-	assert.Len(t, files, 2)
-	assert.Contains(t, files, resolved1)
-	assert.Contains(t, files, resolved2)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetCommitTreeFiles_ReturnsAllFilesAcrossCommits(t *testing.T) {
@@ -1604,11 +1558,11 @@ func TestGetCommitTreeFiles_ReturnsAllFilesAcrossCommits(t *testing.T) {
 	setupGitRepo(t, tmpDir)
 
 	// Create files in multiple commits
-	file1 := createFile(t, tmpDir, "first.txt", "first")
+	createFile(t, tmpDir, "first.txt", "first")
 	gitAdd(t, tmpDir, "first.txt")
 	gitCommit(t, tmpDir, "First commit")
 
-	file2 := createFile(t, tmpDir, "second.txt", "second")
+	createFile(t, tmpDir, "second.txt", "second")
 	gitAdd(t, tmpDir, "second.txt")
 	commitID := gitCommitAndGetSHA(t, tmpDir, "Second commit")
 
@@ -1616,11 +1570,8 @@ func TestGetCommitTreeFiles_ReturnsAllFilesAcrossCommits(t *testing.T) {
 	files, err := GetCommitTreeFiles(tmpDir, commitID)
 
 	require.NoError(t, err)
-	assert.Len(t, files, 2)
-	resolved1, _ := filepath.EvalSymlinks(file1)
-	resolved2, _ := filepath.EvalSymlinks(file2)
-	assert.Contains(t, files, resolved1)
-	assert.Contains(t, files, resolved2)
+	g := gitGoldie(t)
+	g.Assert(t, t.Name(), []byte(normalizeFilePaths(tmpDir, files)))
 }
 
 func TestGetCommitTreeFiles_InvalidCommit(t *testing.T) {

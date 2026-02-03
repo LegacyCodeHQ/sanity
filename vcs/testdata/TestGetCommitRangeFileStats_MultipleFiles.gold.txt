@@ -1,0 +1,2 @@
+$REPO/file1.txt: +2 -1 new=false
+$REPO/file2.txt: +1 -0 new=true

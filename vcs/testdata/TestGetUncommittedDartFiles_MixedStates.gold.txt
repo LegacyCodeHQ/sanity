@@ -1,0 +1,3 @@
+$REPO/committed.dart
+$REPO/staged.dart
+$REPO/untracked.dart
