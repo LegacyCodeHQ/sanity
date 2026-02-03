@@ -35,6 +35,7 @@ help:
 # Run linter
 lint:
 	golangci-lint run ./...
+	go-consistent ./...
 
 # Run all tests
 test:
