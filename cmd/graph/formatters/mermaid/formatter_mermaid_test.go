@@ -21,7 +21,7 @@ func TestMermaidFormatter_BasicFlowchart(t *testing.T) {
 	output, err := formatter.Format(graph, formatters.FormatOptions{})
 	require.NoError(t, err)
 
-	g := goldie.New(t)
+	g := mermaidGoldie(t)
 	g.Assert(t, t.Name(), []byte(output))
 }
 
@@ -34,7 +34,7 @@ func TestMermaidFormatter_WithLabel(t *testing.T) {
 	output, err := formatter.Format(graph, formatters.FormatOptions{Label: "My Graph"})
 	require.NoError(t, err)
 
-	g := goldie.New(t)
+	g := mermaidGoldie(t)
 	g.Assert(t, t.Name(), []byte(output))
 }
 
@@ -47,7 +47,7 @@ func TestMermaidFormatter_WithoutLabel(t *testing.T) {
 	output, err := formatter.Format(graph, formatters.FormatOptions{})
 	require.NoError(t, err)
 
-	g := goldie.New(t)
+	g := mermaidGoldie(t)
 	g.Assert(t, t.Name(), []byte(output))
 }
 
@@ -76,7 +76,7 @@ func TestMermaidFormatter_NewFilesUseSeedlingLabel(t *testing.T) {
 	output, err := formatter.Format(graph, formatters.FormatOptions{FileStats: stats})
 	require.NoError(t, err)
 
-	g := goldie.New(t)
+	g := mermaidGoldie(t)
 	g.Assert(t, t.Name(), []byte(output))
 }
 
@@ -92,7 +92,7 @@ func TestMermaidFormatter_TestFilesAreStyled(t *testing.T) {
 	output, err := formatter.Format(graph, formatters.FormatOptions{})
 	require.NoError(t, err)
 
-	g := goldie.New(t)
+	g := mermaidGoldie(t)
 	g.Assert(t, t.Name(), []byte(output))
 }
 
@@ -108,7 +108,7 @@ func TestMermaidFormatter_DartTestFiles(t *testing.T) {
 	output, err := formatter.Format(graph, formatters.FormatOptions{})
 	require.NoError(t, err)
 
-	g := goldie.New(t)
+	g := mermaidGoldie(t)
 	g.Assert(t, t.Name(), []byte(output))
 }
 
@@ -135,7 +135,7 @@ func TestMermaidFormatter_NewFilesAreStyled(t *testing.T) {
 	output, err := formatter.Format(graph, formatters.FormatOptions{FileStats: stats})
 	require.NoError(t, err)
 
-	g := goldie.New(t)
+	g := mermaidGoldie(t)
 	g.Assert(t, t.Name(), []byte(output))
 }
 
@@ -152,7 +152,7 @@ func TestMermaidFormatter_TypeScriptTestFiles(t *testing.T) {
 	output, err := formatter.Format(graph, formatters.FormatOptions{})
 	require.NoError(t, err)
 
-	g := goldie.New(t)
+	g := mermaidGoldie(t)
 	g.Assert(t, t.Name(), []byte(output))
 }
 
@@ -167,7 +167,7 @@ func TestMermaidFormatter_EdgesBetweenNodes(t *testing.T) {
 	output, err := formatter.Format(graph, formatters.FormatOptions{})
 	require.NoError(t, err)
 
-	g := goldie.New(t)
+	g := mermaidGoldie(t)
 	g.Assert(t, t.Name(), []byte(output))
 }
 
@@ -180,7 +180,7 @@ func TestMermaidFormatter_QuoteEscaping(t *testing.T) {
 	output, err := formatter.Format(graph, formatters.FormatOptions{})
 	require.NoError(t, err)
 
-	g := goldie.New(t)
+	g := mermaidGoldie(t)
 	g.Assert(t, t.Name(), []byte(output))
 }
 
@@ -191,7 +191,7 @@ func TestMermaidFormatter_EmptyGraph(t *testing.T) {
 	output, err := formatter.Format(graph, formatters.FormatOptions{})
 	require.NoError(t, err)
 
-	g := goldie.New(t)
+	g := mermaidGoldie(t)
 	g.Assert(t, t.Name(), []byte(output))
 }
 
@@ -211,7 +211,7 @@ func TestMermaidFormatter_FileStatsWithOnlyAdditions(t *testing.T) {
 	output, err := formatter.Format(graph, formatters.FormatOptions{FileStats: stats})
 	require.NoError(t, err)
 
-	g := goldie.New(t)
+	g := mermaidGoldie(t)
 	g.Assert(t, t.Name(), []byte(output))
 }
 
@@ -231,7 +231,7 @@ func TestMermaidFormatter_FileStatsWithOnlyDeletions(t *testing.T) {
 	output, err := formatter.Format(graph, formatters.FormatOptions{FileStats: stats})
 	require.NoError(t, err)
 
-	g := goldie.New(t)
+	g := mermaidGoldie(t)
 	g.Assert(t, t.Name(), []byte(output))
 }
 
@@ -250,6 +250,10 @@ func TestMermaidFormatter_TestFileTakesPriorityOverNewFile(t *testing.T) {
 	output, err := formatter.Format(graph, formatters.FormatOptions{FileStats: stats})
 	require.NoError(t, err)
 
-	g := goldie.New(t)
+	g := mermaidGoldie(t)
 	g.Assert(t, t.Name(), []byte(output))
+}
+
+func mermaidGoldie(t *testing.T) *goldie.Goldie {
+	return goldie.New(t, goldie.WithNameSuffix(".gold.mermaid"))
 }
