@@ -237,3 +237,33 @@ func TestDependencyGraph_ToDOT_TypeScriptTestFiles(t *testing.T) {
 	assert.Contains(t, dot, `"App.tsx" [label="App.tsx", style=filled, fillcolor=white]`)
 	assert.Contains(t, dot, `"utils.tsx" [label="utils.tsx", style=filled, fillcolor=white]`)
 }
+
+func TestDependencyGraph_ToDOT_NodesAreDeclaredOnlyOnce(t *testing.T) {
+	// Test that nodes are declared exactly once, even when they have no dependencies
+	graph := parsers.DependencyGraph{
+		"/project/main.go":       {"/project/utils.go"},
+		"/project/utils.go":      {},                          // No dependencies - should not be re-declared
+		"/project/standalone.go": {},                          // No dependencies - should not be re-declared
+		"/project/config.go":     {"/project/standalone.go"},
+	}
+
+	formatter := &formatters.DOTFormatter{}
+	dot, err := formatter.Format(graph, formatters.FormatOptions{})
+	require.NoError(t, err)
+
+	// Each node should appear exactly once as a node declaration (with style attributes)
+	// Node declarations look like: "filename.go" [label=...
+	nodeFiles := []string{"main.go", "utils.go", "standalone.go", "config.go"}
+	for _, file := range nodeFiles {
+		// Count occurrences of the node declaration pattern
+		nodeDecl := `"` + file + `" [label=`
+		count := strings.Count(dot, nodeDecl)
+		assert.Equal(t, 1, count, "Node %q should be declared exactly once, found %d times", file, count)
+	}
+
+	// Verify standalone nodes (no dependencies) are NOT re-declared as bare nodes
+	// A bare node looks like: "filename.go";
+	// These should only appear for nodes that have outgoing edges or as part of the styled declaration
+	assert.NotContains(t, dot, "\n  \"utils.go\";\n", "utils.go should not be re-declared as bare node")
+	assert.NotContains(t, dot, "\n  \"standalone.go\";\n", "standalone.go should not be re-declared as bare node")
+}

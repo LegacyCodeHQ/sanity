@@ -142,17 +142,12 @@ func (f *DOTFormatter) Format(g parsers.DependencyGraph, opts FormatOptions) (st
 		sb.WriteString("\n")
 	}
 
+	// Write edges (nodes are already declared above with styling)
 	for source, deps := range g {
-		// Use base filename for cleaner visualization
 		sourceBase := filepath.Base(source)
 		for _, dep := range deps {
 			depBase := filepath.Base(dep)
 			sb.WriteString(fmt.Sprintf("  %q -> %q;\n", sourceBase, depBase))
-		}
-
-		// Handle files with no dependencies
-		if len(deps) == 0 {
-			sb.WriteString(fmt.Sprintf("  %q;\n", sourceBase))
 		}
 	}
 
