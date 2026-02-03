@@ -1,8 +1,6 @@
 package formatters
 
-import (
-	"github.com/LegacyCodeHQ/sanity/parsers"
-)
+import "github.com/LegacyCodeHQ/sanity/parsers"
 
 // Formatter is the interface that all graph formatters must implement.
 type Formatter interface {

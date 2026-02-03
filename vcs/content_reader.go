@@ -1,8 +1,6 @@
 package vcs
 
-import (
-	"os"
-)
+import "os"
 
 // ContentReader is a function that reads file content given a file path.
 // This allows the caller to control how files are read (filesystem, git, etc.)

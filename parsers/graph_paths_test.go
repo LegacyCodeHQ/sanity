@@ -126,7 +126,7 @@ func TestFindPathNodes_NoTargets(t *testing.T) {
 
 	result := FindPathNodes(graph, []string{})
 
-	if len(result) != 0 {
+	if len(result) > 0 {
 		t.Errorf("Expected empty result for no targets, got %d nodes", len(result))
 	}
 }
@@ -229,7 +229,7 @@ func TestExtractSubgraph(t *testing.T) {
 	}
 
 	// B's deps should be empty (C was filtered out)
-	if deps := result["B"]; len(deps) != 0 {
+	if deps := result["B"]; len(deps) > 0 {
 		t.Errorf("B should have no deps, got %v", deps)
 	}
 }
@@ -258,4 +258,3 @@ func assertGraphContainsNodes(t *testing.T, graph DependencyGraph, expectedNodes
 		t.Errorf("Expected %d nodes %v, got %d nodes %v", len(expectedNodes), expectedNodes, len(actualNodes), actualNodes)
 	}
 }
-

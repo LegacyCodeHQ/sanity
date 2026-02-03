@@ -266,8 +266,7 @@ func BuildDependencyGraph(filePaths []string, contentReader vcs.ContentReader) (
 					kotlinFilePackages,
 					kotlinPackageTypes,
 					imports,
-					suppliedFiles,
-				)
+					suppliedFiles)
 				projectImports = append(projectImports, samePackageDeps...)
 			}
 		} else if ext == ".ts" || ext == ".tsx" {
