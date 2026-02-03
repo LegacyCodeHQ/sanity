@@ -1,4 +1,4 @@
-.PHONY: test test-coverage coverage coverage-html clean help build-dev release-check lint
+.PHONY: test test-update-golden test-coverage coverage coverage-html clean help build-dev release-check lint
 
 # Version information (can be overridden via command line)
 # Try to get version from git tag, otherwise use "dev"
@@ -17,9 +17,10 @@ help:
 	@echo "Testing:"
 	@echo "  lint             - Run golangci-lint"
 	@echo "  test             - Run all tests"
-	@echo "  test-coverage    - Run tests with coverage percentage"
-	@echo "  coverage         - Generate coverage profile (coverage.out)"
-	@echo "  coverage-html    - Generate HTML coverage report (coverage.html)"
+	@echo "  test-update-golden - Update golden test fixtures"
+	@echo "  test-coverage      - Run tests with coverage percentage"
+	@echo "  coverage           - Generate coverage profile (coverage.out)"
+	@echo "  coverage-html      - Generate HTML coverage report (coverage.html)"
 	@echo ""
 	@echo "Building:"
 	@echo "  build-dev      - Build for current platform with CGO"
