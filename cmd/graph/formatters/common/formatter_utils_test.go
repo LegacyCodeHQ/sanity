@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/LegacyCodeHQ/sanity/cmd/graph/formatters"
+	"github.com/LegacyCodeHQ/sanity/cmd/graph/formatters/common"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -17,7 +17,7 @@ func TestGetExtensionColors_BasicFunctionality(t *testing.T) {
 		"config.json",
 	}
 
-	colors := formatters.GetExtensionColors(fileNames)
+	colors := common.GetExtensionColors(fileNames)
 
 	// Should have 3 unique extensions: .go, .dart, .json
 	assert.Len(t, colors, 3)
@@ -37,7 +37,7 @@ func TestGetExtensionColors_BasicFunctionality(t *testing.T) {
 }
 
 func TestGetExtensionColors_EmptyList(t *testing.T) {
-	colors := formatters.GetExtensionColors([]string{})
+	colors := common.GetExtensionColors([]string{})
 
 	assert.Empty(t, colors)
 }
@@ -50,7 +50,7 @@ func TestGetExtensionColors_FilesWithoutExtensions(t *testing.T) {
 		"main.go", // One file with extension
 	}
 
-	colors := formatters.GetExtensionColors(fileNames)
+	colors := common.GetExtensionColors(fileNames)
 
 	// Should only have .go extension
 	assert.Len(t, colors, 1)
@@ -66,7 +66,7 @@ func TestGetExtensionColors_SameExtensionMultipleFiles(t *testing.T) {
 		"helpers.go",
 	}
 
-	colors := formatters.GetExtensionColors(fileNames)
+	colors := common.GetExtensionColors(fileNames)
 
 	// Should only have one extension (.go) with one color
 	assert.Len(t, colors, 1)
@@ -82,7 +82,7 @@ func TestGetExtensionColors_WithPaths(t *testing.T) {
 		"relative/path/config.json",
 	}
 
-	colors := formatters.GetExtensionColors(fileNames)
+	colors := common.GetExtensionColors(fileNames)
 
 	// Should extract extensions correctly from full paths
 	assert.Len(t, colors, 3)
@@ -116,7 +116,7 @@ func TestGetExtensionColors_ManyExtensions(t *testing.T) {
 		"file20.hs",
 	}
 
-	colors := formatters.GetExtensionColors(fileNames)
+	colors := common.GetExtensionColors(fileNames)
 
 	// Should have 20 unique extensions
 	assert.Len(t, colors, 20)
@@ -146,7 +146,7 @@ func TestGetExtensionColors_WithinCallConsistency(t *testing.T) {
 		"settings.json",
 	}
 
-	colors := formatters.GetExtensionColors(fileNames)
+	colors := common.GetExtensionColors(fileNames)
 
 	// Should have 3 unique extensions
 	assert.Len(t, colors, 3)
@@ -179,7 +179,7 @@ func TestGetExtensionColors_MixedWithAndWithoutExtensions(t *testing.T) {
 		"Makefile",
 	}
 
-	colors := formatters.GetExtensionColors(fileNames)
+	colors := common.GetExtensionColors(fileNames)
 
 	// Should only have extensions for files that have them
 	assert.Len(t, colors, 3)
@@ -198,7 +198,7 @@ func TestGetExtensionColors_ValidColorNames(t *testing.T) {
 		"file5.xml",
 	}
 
-	colors := formatters.GetExtensionColors(fileNames)
+	colors := common.GetExtensionColors(fileNames)
 
 	// Valid color names from the palette
 	validColors := []string{
@@ -222,7 +222,7 @@ func TestGetExtensionColors_FilesWithMultipleDots(t *testing.T) {
 		"main.go",
 	}
 
-	colors := formatters.GetExtensionColors(fileNames)
+	colors := common.GetExtensionColors(fileNames)
 
 	// Should extract the last extension correctly
 	assert.Len(t, colors, 3)
@@ -243,7 +243,7 @@ func TestGetExtensionColors_HiddenFiles(t *testing.T) {
 		"main.go",
 	}
 
-	colors := formatters.GetExtensionColors(fileNames)
+	colors := common.GetExtensionColors(fileNames)
 
 	// Hidden files without extensions should be skipped
 	// .env might be considered as having no extension or empty extension
@@ -262,7 +262,7 @@ func TestGetExtensionColors_PathsWithDotsInDirectoryNames(t *testing.T) {
 		"relative/path.dir/config.json",
 	}
 
-	colors := formatters.GetExtensionColors(fileNames)
+	colors := common.GetExtensionColors(fileNames)
 
 	// Should extract extensions correctly regardless of dots in directory names
 	assert.Len(t, colors, 3)
@@ -284,7 +284,7 @@ func TestGetExtensionColors_MatchesToDOTBehavior(t *testing.T) {
 		"config.json",
 	}
 
-	colors := formatters.GetExtensionColors(fileNames)
+	colors := common.GetExtensionColors(fileNames)
 
 	// Should extract extensions correctly (same as ToDOT would)
 	assert.Len(t, colors, 3)

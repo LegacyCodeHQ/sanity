@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/LegacyCodeHQ/sanity/cmd/graph/formatters"
 	"github.com/LegacyCodeHQ/sanity/cmd/graph/formatters/common"
 	"github.com/LegacyCodeHQ/sanity/parsers"
 )
@@ -16,7 +17,7 @@ import (
 type MermaidFormatter struct{}
 
 // Format converts the dependency graph to Mermaid.js flowchart format.
-func (f *MermaidFormatter) Format(g parsers.DependencyGraph, opts common.FormatOptions) (string, error) {
+func (f *MermaidFormatter) Format(g parsers.DependencyGraph, opts formatters.FormatOptions) (string, error) {
 	var sb strings.Builder
 
 	// Add title if label provided

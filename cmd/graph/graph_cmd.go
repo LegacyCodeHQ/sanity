@@ -304,7 +304,7 @@ Examples:
 		}
 
 		// Create formatter and generate output
-		formatter, err := formatters.NewFormatter(outputFormat)
+		formatter, err := NewFormatter(outputFormat)
 		if err != nil {
 			return err
 		}

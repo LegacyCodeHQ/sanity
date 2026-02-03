@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/LegacyCodeHQ/sanity/cmd/graph/formatters"
 	"github.com/LegacyCodeHQ/sanity/cmd/graph/formatters/common"
 	"github.com/LegacyCodeHQ/sanity/parsers"
 )
@@ -14,7 +15,7 @@ import (
 type DOTFormatter struct{}
 
 // Format converts the dependency graph to Graphviz DOT format.
-func (f *DOTFormatter) Format(g parsers.DependencyGraph, opts common.FormatOptions) (string, error) {
+func (f *DOTFormatter) Format(g parsers.DependencyGraph, opts formatters.FormatOptions) (string, error) {
 	var sb strings.Builder
 	sb.WriteString("digraph dependencies {\n")
 	sb.WriteString("  rankdir=LR;\n")
