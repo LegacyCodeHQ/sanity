@@ -4,7 +4,9 @@ import (
 	"os"
 
 	"github.com/LegacyCodeHQ/sanity/cmd/graph"
+	initcmd "github.com/LegacyCodeHQ/sanity/cmd/init"
 	"github.com/LegacyCodeHQ/sanity/cmd/onboard"
+	"github.com/LegacyCodeHQ/sanity/cmd/prime"
 	"github.com/spf13/cobra"
 )
 
@@ -44,7 +46,9 @@ func Execute() {
 func init() {
 	// Register subcommands
 	rootCmd.AddCommand(graph.Cmd)
+	rootCmd.AddCommand(initcmd.Cmd)
 	rootCmd.AddCommand(onboard.Cmd)
+	rootCmd.AddCommand(prime.Cmd)
 
 	// Initialize annotations for version template
 	if rootCmd.Annotations == nil {
