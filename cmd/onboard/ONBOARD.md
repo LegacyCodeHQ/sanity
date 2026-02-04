@@ -31,5 +31,25 @@ sanity graph -f mermaid
 
 Render the mermaid diagram output directly within the IDE or desktop application interface.
 
+## Sanity Use Cases
+
+### Auditing AI-Generated Code
+
+After generating or modifying code, run `sanity graph` to visualize the relationships between changed files. This helps:
+
+- Review the scope, impact, and blast radius of changes
+- Identify unintended dependencies
+- Verify that modifications follow the project's architectural patterns
+- Catch potential issues before committing code
+
+**Quick Reference:**
+
+- `sanity graph`             - Output Graphviz (dot) format
+- `sanity graph -u`          - Generate URL for online Graphviz viewer
+- `sanity graph -f mermaid`  - Output mermaid diagram for IDE/desktop rendering
+- `sanity graph -c HEAD~3`   - Graph files from recent commits
+
+For all options: `sanity graph --help`
+
 ---
 --- END AGENTS.MD CONTENT ---
