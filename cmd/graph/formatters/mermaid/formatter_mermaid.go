@@ -11,14 +11,14 @@ import (
 
 	"github.com/LegacyCodeHQ/sanity/cmd/graph/formatters"
 	"github.com/LegacyCodeHQ/sanity/cmd/graph/formatters/common"
-	"github.com/LegacyCodeHQ/sanity/parsers"
+	"github.com/LegacyCodeHQ/sanity/depgraph"
 )
 
 // MermaidFormatter formats dependency graphs as Mermaid.js flowcharts.
 type MermaidFormatter struct{}
 
 // Format converts the dependency graph to Mermaid.js flowchart format.
-func (f *MermaidFormatter) Format(g parsers.DependencyGraph, opts formatters.FormatOptions) (string, error) {
+func (f *MermaidFormatter) Format(g depgraph.DependencyGraph, opts formatters.FormatOptions) (string, error) {
 	var sb strings.Builder
 
 	// Add title if label provided

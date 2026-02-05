@@ -1,4 +1,4 @@
-package parsers
+package depgraph
 
 // FindPathNodes returns all nodes on any path between specified files.
 // Treats the graph bidirectionally (paths from A to B OR from B to A).

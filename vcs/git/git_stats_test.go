@@ -61,13 +61,13 @@ func TestParseRenamedFilePath_AbbreviatedFormat(t *testing.T) {
 	}{
 		{
 			name:     "empty old path",
-			input:    "parsers/{ => dart}/dart_parser.go",
-			expected: "parsers/dart/dart_parser.go",
+			input:    "depgraph/{ => dart}/dart_parser.go",
+			expected: "depgraph/dart/dart_parser.go",
 		},
 		{
 			name:     "both old and new paths",
-			input:    "parsers/{old => new}/parser.go",
-			expected: "parsers/new/parser.go",
+			input:    "depgraph/{old => new}/parser.go",
+			expected: "depgraph/new/parser.go",
 		},
 		{
 			name:     "file rename in same directory",
@@ -123,8 +123,8 @@ func TestParseRenamedFilePath_NoRename(t *testing.T) {
 	}{
 		{
 			name:     "regular file path",
-			input:    "parsers/dependency_graph.go",
-			expected: "parsers/dependency_graph.go",
+			input:    "depgraph/dependency_graph.go",
+			expected: "depgraph/dependency_graph.go",
 		},
 		{
 			name:     "file with braces but no arrow",

@@ -1,4 +1,4 @@
-package parsers
+package depgraph
 
 // DependencyGraph represents a mapping from file paths to their project dependencies
 type DependencyGraph map[string][]string

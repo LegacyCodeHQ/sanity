@@ -1,4 +1,4 @@
-package parsers
+package depgraph
 
 import (
 	"path/filepath"

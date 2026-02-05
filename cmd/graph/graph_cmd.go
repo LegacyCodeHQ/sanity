@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/LegacyCodeHQ/sanity/cmd/graph/formatters"
-	"github.com/LegacyCodeHQ/sanity/parsers"
+	"github.com/LegacyCodeHQ/sanity/depgraph"
 	"github.com/LegacyCodeHQ/sanity/vcs"
 	"github.com/LegacyCodeHQ/sanity/vcs/git"
 
@@ -59,8 +59,13 @@ Examples:
 	}
 
 	// Add format flag
-	cmd.Flags().StringVarP(&opts.outputFormat, "format", "f", opts.outputFormat,
-		fmt.Sprintf("Output format (%s)", formatters.SupportedFormats()))
+	cmd.Flags().StringVarP(
+		&opts.outputFormat,
+		"format",
+		"f",
+		opts.outputFormat,
+		fmt.Sprintf("Output format (%s)", formatters.SupportedFormats()),
+	)
 	// Add repo flag
 	cmd.Flags().StringVarP(&opts.repoPath, "repo", "r", "", "Git repository path (default: current directory)")
 	// Add commit flag
@@ -103,7 +108,7 @@ func runGraph(cmd *cobra.Command, opts *graphOptions) error {
 
 	contentReader := selectContentReader(opts, toCommit)
 
-	graph, err := parsers.BuildDependencyGraph(filePaths, contentReader)
+	graph, err := depgraph.BuildDependencyGraph(filePaths, contentReader)
 	if err != nil {
 		return fmt.Errorf("failed to build dependency graph: %w", err)
 	}
@@ -297,7 +302,7 @@ func selectContentReader(opts *graphOptions, toCommit string) vcs.ContentReader 
 	return vcs.FilesystemContentReader()
 }
 
-func applyTargetFileFilter(opts *graphOptions, graph parsers.DependencyGraph, filePaths []string) (parsers.DependencyGraph, []string, error) {
+func applyTargetFileFilter(opts *graphOptions, graph depgraph.DependencyGraph, filePaths []string) (depgraph.DependencyGraph, []string, error) {
 	if opts.targetFile == "" {
 		return graph, filePaths, nil
 	}
@@ -317,7 +322,7 @@ func applyTargetFileFilter(opts *graphOptions, graph parsers.DependencyGraph, fi
 	return graph, filePaths, nil
 }
 
-func applyBetweenFilter(opts *graphOptions, graph parsers.DependencyGraph, filePaths []string) (parsers.DependencyGraph, []string, error) {
+func applyBetweenFilter(opts *graphOptions, graph depgraph.DependencyGraph, filePaths []string) (depgraph.DependencyGraph, []string, error) {
 	if len(opts.betweenFiles) == 0 {
 		return graph, filePaths, nil
 	}
@@ -330,13 +335,13 @@ func applyBetweenFilter(opts *graphOptions, graph parsers.DependencyGraph, fileP
 		return nil, nil, fmt.Errorf("at least 2 files required for --between, found %d in graph", len(resolvedPaths))
 	}
 
-	graph = parsers.FindPathNodes(graph, resolvedPaths)
+	graph = depgraph.FindPathNodes(graph, resolvedPaths)
 	filePaths = graphFiles(graph)
 
 	return graph, filePaths, nil
 }
 
-func graphFiles(graph parsers.DependencyGraph) []string {
+func graphFiles(graph depgraph.DependencyGraph) []string {
 	filePaths := make([]string, 0, len(graph))
 	for f := range graph {
 		filePaths = append(filePaths, f)
@@ -498,7 +503,7 @@ func expandPaths(paths []string) ([]string, error) {
 
 // resolveAndValidatePaths resolves file paths to absolute paths and validates they exist in the graph.
 // Returns the list of resolved paths that exist in the graph and the list of paths that were not found.
-func resolveAndValidatePaths(paths []string, graph parsers.DependencyGraph) (resolved []string, missing []string) {
+func resolveAndValidatePaths(paths []string, graph depgraph.DependencyGraph) (resolved []string, missing []string) {
 	for _, p := range paths {
 		absPath, err := filepath.Abs(p)
 		if err != nil {
@@ -519,7 +524,7 @@ func resolveAndValidatePaths(paths []string, graph parsers.DependencyGraph) (res
 // the specified number of levels from the target file. It includes both direct
 // dependencies (files the target imports) and reverse dependencies (files that
 // import the target).
-func filterGraphByLevel(graph parsers.DependencyGraph, targetFile string, level int) parsers.DependencyGraph {
+func filterGraphByLevel(graph depgraph.DependencyGraph, targetFile string, level int) depgraph.DependencyGraph {
 	// Build reverse adjacency map (who depends on this file)
 	reverseDeps := make(map[string][]string)
 	for file, deps := range graph {
@@ -555,7 +560,7 @@ func filterGraphByLevel(graph parsers.DependencyGraph, targetFile string, level 
 	}
 
 	// Build filtered graph with only visited nodes
-	filtered := make(parsers.DependencyGraph)
+	filtered := make(depgraph.DependencyGraph)
 	for file := range visited {
 		// Only include edges where both source and target are in the filtered set
 		var filteredDeps []string

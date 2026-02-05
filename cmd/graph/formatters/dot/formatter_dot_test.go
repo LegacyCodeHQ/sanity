@@ -5,14 +5,14 @@ import (
 
 	"github.com/LegacyCodeHQ/sanity/cmd/graph/formatters"
 	"github.com/LegacyCodeHQ/sanity/cmd/graph/formatters/dot"
+	"github.com/LegacyCodeHQ/sanity/depgraph"
 	"github.com/LegacyCodeHQ/sanity/internal/testhelpers"
-	"github.com/LegacyCodeHQ/sanity/parsers"
 	"github.com/LegacyCodeHQ/sanity/vcs"
 	"github.com/stretchr/testify/require"
 )
 
 func TestDependencyGraph_ToDOT(t *testing.T) {
-	graph := parsers.DependencyGraph{
+	graph := depgraph.DependencyGraph{
 		"/project/main.dart":  {"/project/utils.dart"},
 		"/project/utils.dart": {},
 	}
@@ -26,7 +26,7 @@ func TestDependencyGraph_ToDOT(t *testing.T) {
 }
 
 func TestDependencyGraph_ToDOT_NewFilesUseSeedlingLabel(t *testing.T) {
-	graph := parsers.DependencyGraph{
+	graph := depgraph.DependencyGraph{
 		"/project/new_file.dart":       {},
 		"/project/new_with_stats.dart": {},
 		"/project/existing.dart":       {},
@@ -55,7 +55,7 @@ func TestDependencyGraph_ToDOT_NewFilesUseSeedlingLabel(t *testing.T) {
 }
 
 func TestDependencyGraph_ToDOT_TestFilesAreLightGreen(t *testing.T) {
-	graph := parsers.DependencyGraph{
+	graph := depgraph.DependencyGraph{
 		"/project/main.go":       {"/project/utils.go"},
 		"/project/utils.go":      {},
 		"/project/main_test.go":  {"/project/main.go"},
@@ -71,7 +71,7 @@ func TestDependencyGraph_ToDOT_TestFilesAreLightGreen(t *testing.T) {
 }
 
 func TestDependencyGraph_ToDOT_TestFilesAreLightGreen_Dart(t *testing.T) {
-	graph := parsers.DependencyGraph{
+	graph := depgraph.DependencyGraph{
 		"/project/lib/main.dart":        {"/project/lib/utils.dart"},
 		"/project/lib/utils.dart":       {},
 		"/project/test/main_test.dart":  {"/project/lib/main.dart"},
@@ -87,7 +87,7 @@ func TestDependencyGraph_ToDOT_TestFilesAreLightGreen_Dart(t *testing.T) {
 }
 
 func TestDependencyGraph_ToDOT_MajorityExtensionIsWhite(t *testing.T) {
-	graph := parsers.DependencyGraph{
+	graph := depgraph.DependencyGraph{
 		"/project/main.go":          {"/project/utils.go"},
 		"/project/utils.go":         {},
 		"/project/output_format.go": {},
@@ -106,7 +106,7 @@ func TestDependencyGraph_ToDOT_MajorityExtensionIsWhite(t *testing.T) {
 }
 
 func TestDependencyGraph_ToDOT_MajorityExtensionIsWhite_WithTestFiles(t *testing.T) {
-	graph := parsers.DependencyGraph{
+	graph := depgraph.DependencyGraph{
 		"/project/main.go":          {"/project/utils.go"},
 		"/project/utils.go":         {},
 		"/project/output_format.go": {},
@@ -124,7 +124,7 @@ func TestDependencyGraph_ToDOT_MajorityExtensionIsWhite_WithTestFiles(t *testing
 }
 
 func TestDependencyGraph_ToDOT_MajorityExtensionTie(t *testing.T) {
-	graph := parsers.DependencyGraph{
+	graph := depgraph.DependencyGraph{
 		"/project/main.go":    {},
 		"/project/utils.go":   {},
 		"/project/main.dart":  {},
@@ -140,7 +140,7 @@ func TestDependencyGraph_ToDOT_MajorityExtensionTie(t *testing.T) {
 }
 
 func TestDependencyGraph_ToDOT_SingleExtensionAllWhite(t *testing.T) {
-	graph := parsers.DependencyGraph{
+	graph := depgraph.DependencyGraph{
 		"/project/main.go":          {"/project/utils.go"},
 		"/project/utils.go":         {},
 		"/project/output_format.go": {},
@@ -155,7 +155,7 @@ func TestDependencyGraph_ToDOT_SingleExtensionAllWhite(t *testing.T) {
 }
 
 func TestDependencyGraph_ToDOT_TypeScriptTestFiles(t *testing.T) {
-	graph := parsers.DependencyGraph{
+	graph := depgraph.DependencyGraph{
 		"/project/src/App.tsx":                    {"/project/src/utils.tsx"},
 		"/project/src/utils.tsx":                  {},
 		"/project/src/App.test.tsx":               {"/project/src/App.tsx"},
@@ -172,7 +172,7 @@ func TestDependencyGraph_ToDOT_TypeScriptTestFiles(t *testing.T) {
 }
 
 func TestDependencyGraph_ToDOT_NodesAreDeclaredOnlyOnce(t *testing.T) {
-	graph := parsers.DependencyGraph{
+	graph := depgraph.DependencyGraph{
 		"/project/main.go":       {"/project/utils.go"},
 		"/project/utils.go":      {},
 		"/project/standalone.go": {},

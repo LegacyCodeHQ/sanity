@@ -1,10 +1,10 @@
-package parsers
+package depgraph
 
 import (
-	"github.com/LegacyCodeHQ/sanity/parsers/dart"
-	"github.com/LegacyCodeHQ/sanity/parsers/golang"
-	"github.com/LegacyCodeHQ/sanity/parsers/kotlin"
-	"github.com/LegacyCodeHQ/sanity/parsers/typescript"
+	"github.com/LegacyCodeHQ/sanity/depgraph/dart"
+	"github.com/LegacyCodeHQ/sanity/depgraph/golang"
+	"github.com/LegacyCodeHQ/sanity/depgraph/kotlin"
+	"github.com/LegacyCodeHQ/sanity/depgraph/typescript"
 	"github.com/LegacyCodeHQ/sanity/vcs"
 )
 

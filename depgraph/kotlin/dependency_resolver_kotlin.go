@@ -62,7 +62,7 @@ func BuildKotlinIndices(
 	contentReader vcs.ContentReader,
 ) (map[string][]string, map[string]map[string][]string, map[string]string) {
 	if len(kotlinFiles) == 0 {
-		return nil, nil, map[string]string{}
+		return nil, nil, make(map[string]string)
 	}
 
 	kotlinPackageIndex, kotlinPackageTypes := buildKotlinPackageIndex(kotlinFiles, contentReader)
