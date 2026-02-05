@@ -1,6 +1,9 @@
 package depgraph
 
-import "github.com/LegacyCodeHQ/sanity/vcs"
+import (
+	"github.com/LegacyCodeHQ/sanity/depgraph/langsupport"
+	"github.com/LegacyCodeHQ/sanity/vcs"
+)
 
 // DependencyResolver resolves project imports per file and can finalize graph-wide dependencies.
 type DependencyResolver interface {
@@ -10,14 +13,14 @@ type DependencyResolver interface {
 }
 
 type defaultDependencyResolver struct {
-	extensionResolvers map[string]LanguageResolver
-	resolvers          []LanguageResolver
+	extensionResolvers map[string]langsupport.Resolver
+	resolvers          []langsupport.Resolver
 }
 
 // NewDefaultDependencyResolver creates the built-in language-aware dependency resolver.
 func NewDefaultDependencyResolver(ctx *dependencyGraphContext, contentReader vcs.ContentReader) DependencyResolver {
 	resolver := &defaultDependencyResolver{
-		extensionResolvers: make(map[string]LanguageResolver),
+		extensionResolvers: make(map[string]langsupport.Resolver),
 	}
 
 	for _, language := range languageRegistry {

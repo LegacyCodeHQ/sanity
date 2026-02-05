@@ -4,16 +4,11 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/LegacyCodeHQ/sanity/depgraph/langsupport"
 	"github.com/LegacyCodeHQ/sanity/vcs"
 )
 
-type dependencyGraphContext struct {
-	suppliedFiles map[string]bool
-	dirToFiles    map[string][]string
-	javaFiles     []string
-	kotlinFiles   []string
-	goFiles       []string
-}
+type dependencyGraphContext = langsupport.Context
 
 func buildDependencyGraphContext(filePaths []string, contentReader vcs.ContentReader) (*dependencyGraphContext, error) {
 	suppliedFiles, dirToFiles, javaFiles, kotlinFiles, goFiles, err := collectDependencyGraphFiles(filePaths)
@@ -22,11 +17,11 @@ func buildDependencyGraphContext(filePaths []string, contentReader vcs.ContentRe
 	}
 
 	return &dependencyGraphContext{
-		suppliedFiles: suppliedFiles,
-		dirToFiles:    dirToFiles,
-		javaFiles:     javaFiles,
-		kotlinFiles:   kotlinFiles,
-		goFiles:       goFiles,
+		SuppliedFiles: suppliedFiles,
+		DirToFiles:    dirToFiles,
+		JavaFiles:     javaFiles,
+		KotlinFiles:   kotlinFiles,
+		GoFiles:       goFiles,
 	}, nil
 }
 

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/LegacyCodeHQ/sanity/depgraph/langsupport"
 	"github.com/LegacyCodeHQ/sanity/vcs"
 	graphlib "github.com/dominikbraun/graph"
 )
@@ -171,7 +172,7 @@ func fileDefinesAnyUsedSymbol(depFile string, usedSymbols map[string]bool, expor
 }
 
 func AddGoIntraPackageDependencies(
-	graph graphlib.Graph[string, string],
+	graph langsupport.Graph,
 	goFiles []string,
 	contentReader vcs.ContentReader,
 ) error {
