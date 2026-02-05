@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/LegacyCodeHQ/sanity/cmd/graph/formatters"
-	"github.com/LegacyCodeHQ/sanity/cmd/graph/formatters/common"
 	"github.com/LegacyCodeHQ/sanity/depgraph"
 )
 
@@ -40,8 +39,7 @@ func (f *DOTFormatter) Format(g depgraph.DependencyGraph, opts formatters.Format
 	}
 	sort.Strings(filePaths)
 
-	// Get extension colors using the shared function
-	extensionColors := common.GetExtensionColors(filePaths)
+	extensionColors := getExtensionColors(filePaths)
 
 	// Count files by extension to find the majority extension
 	extensionCounts := make(map[string]int)
@@ -177,4 +175,34 @@ func (f *DOTFormatter) Format(g depgraph.DependencyGraph, opts formatters.Format
 func (f *DOTFormatter) GenerateURL(output string) (string, bool) {
 	encoded := url.PathEscape(output)
 	return fmt.Sprintf("https://dreampuf.github.io/GraphvizOnline/?engine=dot#%s", encoded), true
+}
+
+func getExtensionColors(fileNames []string) map[string]string {
+	availableColors := []string{
+		"lightblue", "lightyellow", "mistyrose", "lightcyan", "lightsalmon",
+		"lightpink", "lavender", "peachpuff", "plum", "powderblue", "khaki",
+		"palegreen", "palegoldenrod", "paleturquoise", "thistle",
+	}
+
+	uniqueExtensions := make(map[string]bool)
+	for _, fileName := range fileNames {
+		ext := filepath.Ext(fileName)
+		if ext != "" {
+			uniqueExtensions[ext] = true
+		}
+	}
+
+	sortedExtensions := make([]string, 0, len(uniqueExtensions))
+	for ext := range uniqueExtensions {
+		sortedExtensions = append(sortedExtensions, ext)
+	}
+	sort.Strings(sortedExtensions)
+
+	extensionColors := make(map[string]string)
+	for i, ext := range sortedExtensions {
+		color := availableColors[i%len(availableColors)]
+		extensionColors[ext] = color
+	}
+
+	return extensionColors
 }
