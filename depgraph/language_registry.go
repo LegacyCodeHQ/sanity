@@ -1,39 +1,27 @@
 package depgraph
 
-type languageResolverKey string
-
-const (
-	languageResolverDart       languageResolverKey = "dart"
-	languageResolverGo         languageResolverKey = "go"
-	languageResolverJava       languageResolverKey = "java"
-	languageResolverKotlin     languageResolverKey = "kotlin"
-	languageResolverTypeScript languageResolverKey = "typescript"
-)
-
 type languageRegistryEntry struct {
-	Name        string
-	Extensions  []string
-	ResolverKey languageResolverKey
+	Module LanguageModule
 }
 
 // languageRegistry is the single source of truth for supported languages.
 // Adding/removing a language should happen here.
 var languageRegistry = []languageRegistryEntry{
-	{Name: "Dart", Extensions: []string{".dart"}, ResolverKey: languageResolverDart},
-	{Name: "Go", Extensions: []string{".go"}, ResolverKey: languageResolverGo},
-	{Name: "Java", Extensions: []string{".java"}, ResolverKey: languageResolverJava},
-	{Name: "Kotlin", Extensions: []string{".kt", ".kts"}, ResolverKey: languageResolverKotlin},
-	{Name: "TypeScript", Extensions: []string{".ts", ".tsx"}, ResolverKey: languageResolverTypeScript},
+	{Module: dartLanguageModule{}},
+	{Module: goLanguageModule{}},
+	{Module: javaLanguageModule{}},
+	{Module: kotlinLanguageModule{}},
+	{Module: typeScriptLanguageModule{}},
 }
 
-func resolverKeyForExtension(ext string) (languageResolverKey, bool) {
+func moduleForExtension(ext string) (LanguageModule, bool) {
 	for _, language := range languageRegistry {
-		for _, languageExt := range language.Extensions {
+		for _, languageExt := range language.Module.Extensions() {
 			if languageExt == ext {
-				return language.ResolverKey, true
+				return language.Module, true
 			}
 		}
 	}
 
-	return "", false
+	return nil, false
 }

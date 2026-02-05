@@ -14,7 +14,7 @@ var supportedLanguageExtensions = buildSupportedLanguageExtensions()
 func buildSupportedLanguageExtensions() map[string]bool {
 	extensions := make(map[string]bool)
 	for _, language := range languageRegistry {
-		for _, ext := range language.Extensions {
+		for _, ext := range language.Module.Extensions() {
 			extensions[ext] = true
 		}
 	}
@@ -26,8 +26,8 @@ func SupportedLanguages() []LanguageSupport {
 	languages := make([]LanguageSupport, len(languageRegistry))
 	for i, language := range languageRegistry {
 		languages[i] = LanguageSupport{
-			Name:       language.Name,
-			Extensions: append([]string(nil), language.Extensions...),
+			Name:       language.Module.Name(),
+			Extensions: append([]string(nil), language.Module.Extensions()...),
 		}
 	}
 	return languages

@@ -1,27 +1,19 @@
 package depgraph
 
-import (
-	"path/filepath"
-
-	"github.com/LegacyCodeHQ/sanity/depgraph/dart"
-	"github.com/LegacyCodeHQ/sanity/depgraph/golang"
-	"github.com/LegacyCodeHQ/sanity/depgraph/java"
-	"github.com/LegacyCodeHQ/sanity/depgraph/typescript"
-)
+import "path/filepath"
 
 // IsTestFile reports whether a file path should be treated as a test file.
 // Detection is delegated to language-specific implementations.
 func IsTestFile(filePath string) bool {
-	switch filepath.Ext(filepath.Base(filePath)) {
-	case ".go":
-		return golang.IsTestFile(filePath)
-	case ".dart":
-		return dart.IsTestFile(filePath)
-	case ".java":
-		return java.IsTestFile(filePath)
-	case ".ts", ".tsx", ".js", ".jsx":
-		return typescript.IsTestFile(filePath)
-	default:
+	ext := filepath.Ext(filepath.Base(filePath))
+	if ext == ".js" || ext == ".jsx" {
+		return typeScriptLanguageModule{}.IsTestFile(filePath)
+	}
+
+	module, ok := moduleForExtension(ext)
+	if !ok {
 		return false
 	}
+
+	return module.IsTestFile(filePath)
 }
