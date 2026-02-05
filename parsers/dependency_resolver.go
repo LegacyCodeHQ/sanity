@@ -15,26 +15,26 @@ type DependencyResolver interface {
 }
 
 type defaultDependencyResolver struct {
-	ctx                  *dependencyGraphContext
-	contentReader        vcs.ContentReader
-	goPackageExportIndex map[string]_go.GoPackageExportIndex
-	kotlinPackageIndex   map[string][]string
-	kotlinPackageTypes   map[string]map[string][]string
-	kotlinFilePackages   map[string]string
+	ctx                *dependencyGraphContext
+	contentReader      vcs.ContentReader
+	goImportResolver   *_go.ProjectImportResolver
+	kotlinPackageIndex map[string][]string
+	kotlinPackageTypes map[string]map[string][]string
+	kotlinFilePackages map[string]string
 }
 
 // NewDefaultDependencyResolver creates the built-in language-aware dependency resolver.
 func NewDefaultDependencyResolver(ctx *dependencyGraphContext, contentReader vcs.ContentReader) DependencyResolver {
-	goPackageExportIndex := _go.BuildGoPackageExportIndices(ctx.dirToFiles, contentReader)
+	goImportResolver := _go.NewProjectImportResolver(ctx.dirToFiles, ctx.suppliedFiles, contentReader)
 	kotlinPackageIndex, kotlinPackageTypes, kotlinFilePackages := kotlin.BuildKotlinIndices(ctx.kotlinFiles, contentReader)
 
 	return &defaultDependencyResolver{
-		ctx:                  ctx,
-		contentReader:        contentReader,
-		goPackageExportIndex: goPackageExportIndex,
-		kotlinPackageIndex:   kotlinPackageIndex,
-		kotlinPackageTypes:   kotlinPackageTypes,
-		kotlinFilePackages:   kotlinFilePackages,
+		ctx:                ctx,
+		contentReader:      contentReader,
+		goImportResolver:   goImportResolver,
+		kotlinPackageIndex: kotlinPackageIndex,
+		kotlinPackageTypes: kotlinPackageTypes,
+		kotlinFilePackages: kotlinFilePackages,
 	}
 }
 
@@ -43,14 +43,7 @@ func (b *defaultDependencyResolver) ResolveProjectImports(absPath, filePath, ext
 	case ".dart":
 		return dart.ResolveDartProjectImports(absPath, filePath, ext, b.ctx.suppliedFiles, b.contentReader)
 	case ".go":
-		return _go.ResolveGoProjectImports(
-			absPath,
-			filePath,
-			b.ctx.dirToFiles,
-			b.goPackageExportIndex,
-			b.ctx.suppliedFiles,
-			b.contentReader,
-		)
+		return b.goImportResolver.ResolveProjectImports(absPath, filePath)
 	case ".kt":
 		return kotlin.ResolveKotlinProjectImports(
 			absPath,

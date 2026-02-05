@@ -10,6 +10,40 @@ import (
 	"github.com/LegacyCodeHQ/sanity/vcs"
 )
 
+// ProjectImportResolver encapsulates Go-specific dependency resolution caches and logic.
+type ProjectImportResolver struct {
+	dirToFiles             map[string][]string
+	goPackageExportIndices map[string]GoPackageExportIndex
+	suppliedFiles          map[string]bool
+	contentReader          vcs.ContentReader
+}
+
+// NewProjectImportResolver creates a Go dependency resolver with precomputed package export indices.
+func NewProjectImportResolver(
+	dirToFiles map[string][]string,
+	suppliedFiles map[string]bool,
+	contentReader vcs.ContentReader,
+) *ProjectImportResolver {
+	return &ProjectImportResolver{
+		dirToFiles:             dirToFiles,
+		goPackageExportIndices: BuildGoPackageExportIndices(dirToFiles, contentReader),
+		suppliedFiles:          suppliedFiles,
+		contentReader:          contentReader,
+	}
+}
+
+// ResolveProjectImports resolves Go project imports for a single file using cached indices.
+func (r *ProjectImportResolver) ResolveProjectImports(absPath, filePath string) ([]string, error) {
+	return ResolveGoProjectImports(
+		absPath,
+		filePath,
+		r.dirToFiles,
+		r.goPackageExportIndices,
+		r.suppliedFiles,
+		r.contentReader,
+	)
+}
+
 func BuildGoPackageExportIndices(dirToFiles map[string][]string, contentReader vcs.ContentReader) map[string]GoPackageExportIndex {
 	goPackageExportIndices := make(map[string]GoPackageExportIndex) // packageDir -> export index
 	for dir, files := range dirToFiles {
