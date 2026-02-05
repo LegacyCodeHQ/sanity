@@ -2,6 +2,11 @@
 
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
+## Committing Changes
+
+- Do **not** commit changes unless the user explicitly asks for a commit.
+- This applies even at session completion.
+
 ## Quick Reference
 
 ```bash
@@ -25,19 +30,10 @@ bd sync                              # Sync with git
    make test
    ```
 3. **Update issue status** - Close finished work, update in-progress items
-4. **Commit all changes** - This is MANDATORY:
    ```bash
    bd sync
-   git status  # MUST show "nothing to commit, working tree clean"
    ```
-5. **Verify** - All changes committed locally
-6. **Hand off** - Provide context for next session
-
-**CRITICAL RULES:**
-- Work is NOT complete until all changes are committed
-- NEVER stop with uncommitted changes - that leaves work in an inconsistent state
-- NEVER say "ready to commit when you are" - YOU must commit
-- If commit fails, resolve and retry until it succeeds
+4. **Hand off** - Provide context for next session
 
 ## Commit Guidelines
 
