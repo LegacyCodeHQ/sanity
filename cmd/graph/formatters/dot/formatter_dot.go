@@ -154,7 +154,15 @@ func (f *Formatter) Format(g depgraph.DependencyGraph, opts formatters.FormatOpt
 			styledNodes[sourceBase] = true
 		}
 	}
-	if len(styledNodes) > 0 {
+	// Determine whether we have any edges before writing the section separator.
+	hasEdges := false
+	for _, deps := range adjacency {
+		if len(deps) > 0 {
+			hasEdges = true
+			break
+		}
+	}
+	if len(styledNodes) > 0 && (hasEdges || opts.Label != "") {
 		sb.WriteString("\n")
 	}
 
