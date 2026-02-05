@@ -13,14 +13,24 @@ import (
 // Only dependencies that are in the supplied file list are included in the graph.
 // The contentReader function is used to read file contents (from filesystem, git commit, etc.)
 func BuildDependencyGraph(filePaths []string, contentReader vcs.ContentReader) (DependencyGraph, error) {
-	graph := make(DependencyGraph)
-
 	ctx, err := buildDependencyGraphContext(filePaths, contentReader)
 	if err != nil {
 		return nil, err
 	}
 
-	dependencyBuilder := NewDependencyBuilder(ctx, contentReader)
+	return BuildDependencyGraphWithBuilder(filePaths, NewDefaultDependencyBuilder(ctx, contentReader))
+}
+
+// BuildDependencyGraphWithBuilder builds a graph using the provided DependencyBuilder implementation.
+func BuildDependencyGraphWithBuilder(
+	filePaths []string,
+	dependencyBuilder DependencyBuilder,
+) (DependencyGraph, error) {
+	graph := make(DependencyGraph)
+
+	if dependencyBuilder == nil {
+		return nil, fmt.Errorf("dependency builder is required")
+	}
 
 	// Second pass: build the dependency graph
 	for _, filePath := range filePaths {

@@ -14,7 +14,7 @@ type DependencyBuilder interface {
 	FinalizeGraph(graph DependencyGraph) error
 }
 
-type dependencyBuilderFactory struct {
+type defaultDependencyBuilder struct {
 	ctx                  *dependencyGraphContext
 	contentReader        vcs.ContentReader
 	goPackageExportIndex map[string]_go.GoPackageExportIndex
@@ -23,12 +23,12 @@ type dependencyBuilderFactory struct {
 	kotlinFilePackages   map[string]string
 }
 
-// NewDependencyBuilder creates a language-aware dependency builder using precomputed indices.
-func NewDependencyBuilder(ctx *dependencyGraphContext, contentReader vcs.ContentReader) DependencyBuilder {
+// NewDefaultDependencyBuilder creates the built-in language-aware dependency builder.
+func NewDefaultDependencyBuilder(ctx *dependencyGraphContext, contentReader vcs.ContentReader) DependencyBuilder {
 	goPackageExportIndex := _go.BuildGoPackageExportIndices(ctx.dirToFiles, contentReader)
 	kotlinPackageIndex, kotlinPackageTypes, kotlinFilePackages := kotlin.BuildKotlinIndices(ctx.kotlinFiles, contentReader)
 
-	return &dependencyBuilderFactory{
+	return &defaultDependencyBuilder{
 		ctx:                  ctx,
 		contentReader:        contentReader,
 		goPackageExportIndex: goPackageExportIndex,
@@ -38,37 +38,36 @@ func NewDependencyBuilder(ctx *dependencyGraphContext, contentReader vcs.Content
 	}
 }
 
-func (f *dependencyBuilderFactory) BuildProjectImports(absPath, filePath, ext string) ([]string, error) {
+func (b *defaultDependencyBuilder) BuildProjectImports(absPath, filePath, ext string) ([]string, error) {
 	switch ext {
 	case ".dart":
-		return dart.BuildDartProjectImports(absPath, filePath, ext, f.ctx.suppliedFiles, f.contentReader)
+		return dart.BuildDartProjectImports(absPath, filePath, ext, b.ctx.suppliedFiles, b.contentReader)
 	case ".go":
 		return _go.BuildGoProjectImports(
 			absPath,
 			filePath,
-			f.ctx.dirToFiles,
-			f.goPackageExportIndex,
-			f.ctx.suppliedFiles,
-			f.contentReader,
+			b.ctx.dirToFiles,
+			b.goPackageExportIndex,
+			b.ctx.suppliedFiles,
+			b.contentReader,
 		)
 	case ".kt":
 		return kotlin.BuildKotlinProjectImports(
 			absPath,
 			filePath,
-			f.kotlinPackageIndex,
-			f.kotlinPackageTypes,
-			f.kotlinFilePackages,
-			f.ctx.suppliedFiles,
-			f.contentReader,
+			b.kotlinPackageIndex,
+			b.kotlinPackageTypes,
+			b.kotlinFilePackages,
+			b.ctx.suppliedFiles,
+			b.contentReader,
 		)
 	case ".ts", ".tsx":
-		return typescript.BuildTypeScriptProjectImports(absPath, filePath, ext, f.ctx.suppliedFiles, f.contentReader)
+		return typescript.BuildTypeScriptProjectImports(absPath, filePath, ext, b.ctx.suppliedFiles, b.contentReader)
 	default:
 		return []string{}, nil
 	}
 }
 
-func (f *dependencyBuilderFactory) FinalizeGraph(graph DependencyGraph) error {
-	return _go.AddGoIntraPackageDependencies(graph, f.ctx.goFiles, f.contentReader)
+func (b *defaultDependencyBuilder) FinalizeGraph(graph DependencyGraph) error {
+	return _go.AddGoIntraPackageDependencies(graph, b.ctx.goFiles, b.contentReader)
 }
-
