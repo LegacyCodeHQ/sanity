@@ -15,14 +15,21 @@ func testGraph(adjacency map[string][]string) depgraph.DependencyGraph {
 	return depgraph.MustDependencyGraph(adjacency)
 }
 
+func testFileGraph(t *testing.T, adjacency map[string][]string, stats map[string]vcs.FileStats) depgraph.FileDependencyGraph {
+	t.Helper()
+	fileGraph, err := depgraph.NewFileDependencyGraph(testGraph(adjacency), stats)
+	require.NoError(t, err)
+	return fileGraph
+}
+
 func TestDependencyGraph_ToDOT(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/main.dart":  {"/project/utils.dart"},
 		"/project/utils.dart": {},
-	})
+	}, nil)
 
 	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)
@@ -30,13 +37,11 @@ func TestDependencyGraph_ToDOT(t *testing.T) {
 }
 
 func TestDependencyGraph_ToDOT_NewFilesUseSeedlingLabel(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/new_file.dart":       {},
 		"/project/new_with_stats.dart": {},
 		"/project/existing.dart":       {},
-	})
-
-	stats := map[string]vcs.FileStats{
+	}, map[string]vcs.FileStats{
 		"/project/new_file.dart": {
 			IsNew: true,
 		},
@@ -48,10 +53,10 @@ func TestDependencyGraph_ToDOT_NewFilesUseSeedlingLabel(t *testing.T) {
 		"/project/existing.dart": {
 			Additions: 3,
 		},
-	}
+	})
 
 	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{FileStats: stats})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)
@@ -59,15 +64,15 @@ func TestDependencyGraph_ToDOT_NewFilesUseSeedlingLabel(t *testing.T) {
 }
 
 func TestDependencyGraph_ToDOT_TestFilesAreLightGreen(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/main.go":       {"/project/utils.go"},
 		"/project/utils.go":      {},
 		"/project/main_test.go":  {"/project/main.go"},
 		"/project/utils_test.go": {"/project/utils.go"},
-	})
+	}, nil)
 
 	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)
@@ -75,15 +80,15 @@ func TestDependencyGraph_ToDOT_TestFilesAreLightGreen(t *testing.T) {
 }
 
 func TestDependencyGraph_ToDOT_TestFilesAreLightGreen_Dart(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/lib/main.dart":        {"/project/lib/utils.dart"},
 		"/project/lib/utils.dart":       {},
 		"/project/test/main_test.dart":  {"/project/lib/main.dart"},
 		"/project/test/utils_test.dart": {"/project/lib/utils.dart"},
-	})
+	}, nil)
 
 	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)
@@ -91,7 +96,7 @@ func TestDependencyGraph_ToDOT_TestFilesAreLightGreen_Dart(t *testing.T) {
 }
 
 func TestDependencyGraph_ToDOT_MajorityExtensionIsWhite(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/main.go":          {"/project/utils.go"},
 		"/project/utils.go":         {},
 		"/project/output_format.go": {},
@@ -99,10 +104,10 @@ func TestDependencyGraph_ToDOT_MajorityExtensionIsWhite(t *testing.T) {
 		"/project/config.go":        {},
 		"/project/main.dart":        {},
 		"/project/utils.dart":       {},
-	})
+	}, nil)
 
 	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)
@@ -110,17 +115,17 @@ func TestDependencyGraph_ToDOT_MajorityExtensionIsWhite(t *testing.T) {
 }
 
 func TestDependencyGraph_ToDOT_MajorityExtensionIsWhite_WithTestFiles(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/main.go":          {"/project/utils.go"},
 		"/project/utils.go":         {},
 		"/project/output_format.go": {},
 		"/project/main_test.go":     {"/project/main.go"},
 		"/project/utils_test.go":    {"/project/utils.go"},
 		"/project/main.dart":        {},
-	})
+	}, nil)
 
 	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)
@@ -128,15 +133,15 @@ func TestDependencyGraph_ToDOT_MajorityExtensionIsWhite_WithTestFiles(t *testing
 }
 
 func TestDependencyGraph_ToDOT_MajorityExtensionTie(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/main.go":    {},
 		"/project/utils.go":   {},
 		"/project/main.dart":  {},
 		"/project/utils.dart": {},
-	})
+	}, nil)
 
 	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)
@@ -144,14 +149,14 @@ func TestDependencyGraph_ToDOT_MajorityExtensionTie(t *testing.T) {
 }
 
 func TestDependencyGraph_ToDOT_SingleExtensionAllWhite(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/main.go":          {"/project/utils.go"},
 		"/project/utils.go":         {},
 		"/project/output_format.go": {},
-	})
+	}, nil)
 
 	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)
@@ -159,16 +164,16 @@ func TestDependencyGraph_ToDOT_SingleExtensionAllWhite(t *testing.T) {
 }
 
 func TestDependencyGraph_ToDOT_TypeScriptTestFiles(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/src/App.tsx":                    {"/project/src/utils.tsx"},
 		"/project/src/utils.tsx":                  {},
 		"/project/src/App.test.tsx":               {"/project/src/App.tsx"},
 		"/project/src/__tests__/utils.test.tsx":   {"/project/src/utils.tsx"},
 		"/project/src/components/Button.spec.tsx": {},
-	})
+	}, nil)
 
 	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)
@@ -176,15 +181,15 @@ func TestDependencyGraph_ToDOT_TypeScriptTestFiles(t *testing.T) {
 }
 
 func TestDependencyGraph_ToDOT_NodesAreDeclaredOnlyOnce(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/main.go":       {"/project/utils.go"},
 		"/project/utils.go":      {},
 		"/project/standalone.go": {},
 		"/project/config.go":     {"/project/standalone.go"},
-	})
+	}, nil)
 
 	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)

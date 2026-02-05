@@ -105,6 +105,12 @@ func GetUncommittedFileStats(repoPath string) (map[string]vcs.FileStats, error) 
 		absPath := filepath.Join(repoRoot, relPath)
 		fileStats := stats[absPath]
 		fileStats.IsNew = true
+		if fileStats.Additions == 0 && fileStats.Deletions == 0 {
+			lineCount, err := countLinesInFile(absPath)
+			if err == nil {
+				fileStats.Additions = lineCount
+			}
+		}
 		stats[absPath] = fileStats
 	}
 
@@ -512,4 +518,20 @@ func isNewStatus(status string) bool {
 	}
 
 	return status[0] == 'A'
+}
+
+func countLinesInFile(path string) (int, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	if len(content) == 0 {
+		return 0, nil
+	}
+
+	lines := bytes.Count(content, []byte{'\n'})
+	if content[len(content)-1] != '\n' {
+		lines++
+	}
+	return lines, nil
 }

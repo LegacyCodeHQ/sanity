@@ -15,8 +15,8 @@ import (
 type Formatter struct{}
 
 // Format converts the dependency graph to Graphviz DOT format.
-func (f *Formatter) Format(g depgraph.DependencyGraph, opts formatters.FormatOptions) (string, error) {
-	adjacency, err := depgraph.AdjacencyList(g)
+func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.RenderOptions) (string, error) {
+	adjacency, err := depgraph.AdjacencyList(g.Graph)
 	if err != nil {
 		return "", err
 	}
@@ -107,8 +107,10 @@ func (f *Formatter) Format(g depgraph.DependencyGraph, opts formatters.FormatOpt
 		if !styledNodes[sourceBase] {
 			var color string
 
+			fileMetadata, hasFileMetadata := g.Meta.Files[source]
+
 			// Priority 1: Test files are always light green
-			if depgraph.IsTestFile(source) {
+			if hasFileMetadata && fileMetadata.IsTest {
 				color = "lightgreen"
 			} else if filesWithMajorityExtension[source] {
 				// Priority 2: Files with majority extension count are always white
@@ -124,29 +126,28 @@ func (f *Formatter) Format(g depgraph.DependencyGraph, opts formatters.FormatOpt
 
 			// Build node label with file stats if available
 			nodeLabel := sourceBase
-			if opts.FileStats != nil {
-				if stats, ok := opts.FileStats[source]; ok {
-					labelPrefix := sourceBase
-					if stats.IsNew {
-						labelPrefix = fmt.Sprintf("🪴 %s", labelPrefix)
-					}
+			if hasFileMetadata && fileMetadata.Stats != nil {
+				stats := *fileMetadata.Stats
+				labelPrefix := sourceBase
+				if stats.IsNew {
+					labelPrefix = fmt.Sprintf("🪴 %s", labelPrefix)
+				}
 
-					if stats.Additions > 0 || stats.Deletions > 0 {
-						var statsParts []string
-						if stats.Additions > 0 {
-							statsParts = append(statsParts, fmt.Sprintf("+%d", stats.Additions))
-						}
-						if stats.Deletions > 0 {
-							statsParts = append(statsParts, fmt.Sprintf("-%d", stats.Deletions))
-						}
-						if len(statsParts) > 0 {
-							nodeLabel = fmt.Sprintf("%s\n%s", labelPrefix, strings.Join(statsParts, " "))
-						} else {
-							nodeLabel = labelPrefix
-						}
-					} else if stats.IsNew {
+				if stats.Additions > 0 || stats.Deletions > 0 {
+					var statsParts []string
+					if stats.Additions > 0 {
+						statsParts = append(statsParts, fmt.Sprintf("+%d", stats.Additions))
+					}
+					if stats.Deletions > 0 {
+						statsParts = append(statsParts, fmt.Sprintf("-%d", stats.Deletions))
+					}
+					if len(statsParts) > 0 {
+						nodeLabel = fmt.Sprintf("%s\n%s", labelPrefix, strings.Join(statsParts, " "))
+					} else {
 						nodeLabel = labelPrefix
 					}
+				} else if stats.IsNew {
+					nodeLabel = labelPrefix
 				}
 			}
 

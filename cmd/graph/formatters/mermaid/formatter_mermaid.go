@@ -17,8 +17,8 @@ import (
 type Formatter struct{}
 
 // Format converts the dependency graph to Mermaid.js flowchart format.
-func (f *Formatter) Format(g depgraph.DependencyGraph, opts formatters.FormatOptions) (string, error) {
-	adjacency, err := depgraph.AdjacencyList(g)
+func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.RenderOptions) (string, error) {
+	adjacency, err := depgraph.AdjacencyList(g.Graph)
 	if err != nil {
 		return "", err
 	}
@@ -98,29 +98,28 @@ func (f *Formatter) Format(g depgraph.DependencyGraph, opts formatters.FormatOpt
 		if !definedNodes[sourceBase] {
 			// Build node label with file stats if available
 			nodeLabel := sourceBase
-			if opts.FileStats != nil {
-				if stats, ok := opts.FileStats[source]; ok {
-					labelPrefix := sourceBase
-					if stats.IsNew {
-						labelPrefix = fmt.Sprintf("🪴 %s", labelPrefix)
-					}
+			if fileMetadata, ok := g.Meta.Files[source]; ok && fileMetadata.Stats != nil {
+				stats := *fileMetadata.Stats
+				labelPrefix := sourceBase
+				if stats.IsNew {
+					labelPrefix = fmt.Sprintf("🪴 %s", labelPrefix)
+				}
 
-					if stats.Additions > 0 || stats.Deletions > 0 {
-						var statsParts []string
-						if stats.Additions > 0 {
-							statsParts = append(statsParts, fmt.Sprintf("+%d", stats.Additions))
-						}
-						if stats.Deletions > 0 {
-							statsParts = append(statsParts, fmt.Sprintf("-%d", stats.Deletions))
-						}
-						if len(statsParts) > 0 {
-							nodeLabel = fmt.Sprintf("%s<br/>%s", labelPrefix, strings.Join(statsParts, " "))
-						} else {
-							nodeLabel = labelPrefix
-						}
-					} else if stats.IsNew {
+				if stats.Additions > 0 || stats.Deletions > 0 {
+					var statsParts []string
+					if stats.Additions > 0 {
+						statsParts = append(statsParts, fmt.Sprintf("+%d", stats.Additions))
+					}
+					if stats.Deletions > 0 {
+						statsParts = append(statsParts, fmt.Sprintf("-%d", stats.Deletions))
+					}
+					if len(statsParts) > 0 {
+						nodeLabel = fmt.Sprintf("%s<br/>%s", labelPrefix, strings.Join(statsParts, " "))
+					} else {
 						nodeLabel = labelPrefix
 					}
+				} else if stats.IsNew {
+					nodeLabel = labelPrefix
 				}
 			}
 
@@ -168,7 +167,8 @@ func (f *Formatter) Format(g depgraph.DependencyGraph, opts formatters.FormatOpt
 		sourceBase := filepath.Base(source)
 		nodeID := nodeIDs[sourceBase]
 
-		if depgraph.IsTestFile(source) {
+		fileMetadata, hasFileMetadata := g.Meta.Files[source]
+		if hasFileMetadata && fileMetadata.IsTest {
 			testNodes = append(testNodes, nodeID)
 		} else if hasMultipleExtensions && filesWithMajorityExtension[source] {
 			majorityExtensionNodes = append(majorityExtensionNodes, nodeID)

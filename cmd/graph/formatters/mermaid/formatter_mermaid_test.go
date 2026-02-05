@@ -15,14 +15,21 @@ func testGraph(adjacency map[string][]string) depgraph.DependencyGraph {
 	return depgraph.MustDependencyGraph(adjacency)
 }
 
+func testFileGraph(t *testing.T, adjacency map[string][]string, stats map[string]vcs.FileStats) depgraph.FileDependencyGraph {
+	t.Helper()
+	fileGraph, err := depgraph.NewFileDependencyGraph(testGraph(adjacency), stats)
+	require.NoError(t, err)
+	return fileGraph
+}
+
 func TestMermaidFormatter_BasicFlowchart(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/main.dart":  {"/project/utils.dart"},
 		"/project/utils.dart": {},
-	})
+	}, nil)
 
 	formatter := &mermaid.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.MermaidGoldie(t)
@@ -30,12 +37,12 @@ func TestMermaidFormatter_BasicFlowchart(t *testing.T) {
 }
 
 func TestMermaidFormatter_WithLabel(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/main.dart": {},
-	})
+	}, nil)
 
 	formatter := &mermaid.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{Label: "My Graph"})
+	output, err := formatter.Format(graph, formatters.RenderOptions{Label: "My Graph"})
 	require.NoError(t, err)
 
 	g := testhelpers.MermaidGoldie(t)
@@ -43,12 +50,12 @@ func TestMermaidFormatter_WithLabel(t *testing.T) {
 }
 
 func TestMermaidFormatter_WithoutLabel(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/main.dart": {},
-	})
+	}, nil)
 
 	formatter := &mermaid.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.MermaidGoldie(t)
@@ -56,13 +63,11 @@ func TestMermaidFormatter_WithoutLabel(t *testing.T) {
 }
 
 func TestMermaidFormatter_NewFilesUseSeedlingLabel(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/new_file.dart":       {},
 		"/project/new_with_stats.dart": {},
 		"/project/existing.dart":       {},
-	})
-
-	stats := map[string]vcs.FileStats{
+	}, map[string]vcs.FileStats{
 		"/project/new_file.dart": {
 			IsNew: true,
 		},
@@ -74,10 +79,10 @@ func TestMermaidFormatter_NewFilesUseSeedlingLabel(t *testing.T) {
 		"/project/existing.dart": {
 			Additions: 3,
 		},
-	}
+	})
 
 	formatter := &mermaid.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{FileStats: stats})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.MermaidGoldie(t)
@@ -85,15 +90,15 @@ func TestMermaidFormatter_NewFilesUseSeedlingLabel(t *testing.T) {
 }
 
 func TestMermaidFormatter_TestFilesAreStyled(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/main.go":       {"/project/utils.go"},
 		"/project/utils.go":      {},
 		"/project/main_test.go":  {"/project/main.go"},
 		"/project/utils_test.go": {"/project/utils.go"},
-	})
+	}, nil)
 
 	formatter := &mermaid.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.MermaidGoldie(t)
@@ -101,15 +106,15 @@ func TestMermaidFormatter_TestFilesAreStyled(t *testing.T) {
 }
 
 func TestMermaidFormatter_DartTestFiles(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/lib/main.dart":        {"/project/lib/utils.dart"},
 		"/project/lib/utils.dart":       {},
 		"/project/test/main_test.dart":  {"/project/lib/main.dart"},
 		"/project/test/utils_test.dart": {"/project/lib/utils.dart"},
-	})
+	}, nil)
 
 	formatter := &mermaid.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.MermaidGoldie(t)
@@ -117,13 +122,11 @@ func TestMermaidFormatter_DartTestFiles(t *testing.T) {
 }
 
 func TestMermaidFormatter_NewFilesAreStyled(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/new_file.dart":  {},
 		"/project/existing.dart":  {},
 		"/project/another_new.go": {},
-	})
-
-	stats := map[string]vcs.FileStats{
+	}, map[string]vcs.FileStats{
 		"/project/new_file.dart": {
 			IsNew: true,
 		},
@@ -133,10 +136,10 @@ func TestMermaidFormatter_NewFilesAreStyled(t *testing.T) {
 		"/project/existing.dart": {
 			Additions: 5,
 		},
-	}
+	})
 
 	formatter := &mermaid.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{FileStats: stats})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.MermaidGoldie(t)
@@ -144,16 +147,16 @@ func TestMermaidFormatter_NewFilesAreStyled(t *testing.T) {
 }
 
 func TestMermaidFormatter_TypeScriptTestFiles(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/src/App.tsx":                    {"/project/src/utils.tsx"},
 		"/project/src/utils.tsx":                  {},
 		"/project/src/App.test.tsx":               {"/project/src/App.tsx"},
 		"/project/src/__tests__/utils.test.tsx":   {"/project/src/utils.tsx"},
 		"/project/src/components/Button.spec.tsx": {},
-	})
+	}, nil)
 
 	formatter := &mermaid.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.MermaidGoldie(t)
@@ -161,14 +164,14 @@ func TestMermaidFormatter_TypeScriptTestFiles(t *testing.T) {
 }
 
 func TestMermaidFormatter_EdgesBetweenNodes(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/a.go": {"/project/b.go", "/project/c.go"},
 		"/project/b.go": {"/project/c.go"},
 		"/project/c.go": {},
-	})
+	}, nil)
 
 	formatter := &mermaid.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.MermaidGoldie(t)
@@ -176,12 +179,12 @@ func TestMermaidFormatter_EdgesBetweenNodes(t *testing.T) {
 }
 
 func TestMermaidFormatter_QuoteEscaping(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/file.go": {},
-	})
+	}, nil)
 
 	formatter := &mermaid.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.MermaidGoldie(t)
@@ -189,10 +192,10 @@ func TestMermaidFormatter_QuoteEscaping(t *testing.T) {
 }
 
 func TestMermaidFormatter_EmptyGraph(t *testing.T) {
-	graph := testGraph(make(map[string][]string))
+	graph := testFileGraph(t, make(map[string][]string), nil)
 
 	formatter := &mermaid.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.MermaidGoldie(t)
@@ -200,19 +203,17 @@ func TestMermaidFormatter_EmptyGraph(t *testing.T) {
 }
 
 func TestMermaidFormatter_FileStatsWithOnlyAdditions(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/modified.go": {},
-	})
-
-	stats := map[string]vcs.FileStats{
+	}, map[string]vcs.FileStats{
 		"/project/modified.go": {
 			Additions: 10,
 			Deletions: 0,
 		},
-	}
+	})
 
 	formatter := &mermaid.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{FileStats: stats})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.MermaidGoldie(t)
@@ -220,19 +221,17 @@ func TestMermaidFormatter_FileStatsWithOnlyAdditions(t *testing.T) {
 }
 
 func TestMermaidFormatter_FileStatsWithOnlyDeletions(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/modified.go": {},
-	})
-
-	stats := map[string]vcs.FileStats{
+	}, map[string]vcs.FileStats{
 		"/project/modified.go": {
 			Additions: 0,
 			Deletions: 5,
 		},
-	}
+	})
 
 	formatter := &mermaid.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{FileStats: stats})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.MermaidGoldie(t)
@@ -240,18 +239,16 @@ func TestMermaidFormatter_FileStatsWithOnlyDeletions(t *testing.T) {
 }
 
 func TestMermaidFormatter_TestFileTakesPriorityOverNewFile(t *testing.T) {
-	graph := testGraph(map[string][]string{
+	graph := testFileGraph(t, map[string][]string{
 		"/project/main_test.go": {},
-	})
-
-	stats := map[string]vcs.FileStats{
+	}, map[string]vcs.FileStats{
 		"/project/main_test.go": {
 			IsNew: true,
 		},
-	}
+	})
 
 	formatter := &mermaid.Formatter{}
-	output, err := formatter.Format(graph, formatters.FormatOptions{FileStats: stats})
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.MermaidGoldie(t)

@@ -64,8 +64,7 @@ Examples:
 		"format",
 		"f",
 		opts.outputFormat,
-		fmt.Sprintf("Output format (%s)", formatters.SupportedFormats()),
-	)
+		fmt.Sprintf("Output format (%s)", formatters.SupportedFormats()))
 	// Add repo flag
 	cmd.Flags().StringVarP(&opts.repoPath, "repo", "r", "", "Git repository path (default: current directory)")
 	// Add commit flag
@@ -126,6 +125,10 @@ func runGraph(cmd *cobra.Command, opts *graphOptions) error {
 	format, _ := formatters.ParseOutputFormat(opts.outputFormat)
 	fileStats := collectFileStats(cmd, opts, format, fromCommit, toCommit, isCommitRange)
 	label := buildGraphLabel(opts, format, fromCommit, toCommit, isCommitRange, filePaths)
+	fileGraph, err := depgraph.NewFileDependencyGraph(graph, fileStats)
+	if err != nil {
+		return fmt.Errorf("failed to build file graph metadata: %w", err)
+	}
 
 	// Create formatter and generate output
 	formatter, err := NewFormatter(opts.outputFormat)
@@ -133,12 +136,11 @@ func runGraph(cmd *cobra.Command, opts *graphOptions) error {
 		return err
 	}
 
-	formatOpts := formatters.FormatOptions{
-		Label:     label,
-		FileStats: fileStats,
+	renderOpts := formatters.RenderOptions{
+		Label: label,
 	}
 
-	output, err := formatter.Format(graph, formatOpts)
+	output, err := formatter.Format(fileGraph, renderOpts)
 	if err != nil {
 		return fmt.Errorf("failed to format graph: %w", err)
 	}
