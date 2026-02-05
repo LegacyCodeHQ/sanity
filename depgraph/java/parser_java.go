@@ -67,9 +67,10 @@ func (i InternalImport) Package() string {
 }
 
 var (
-	packagePattern = regexp.MustCompile(`(?m)^\s*package\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*;`)
-	importPattern  = regexp.MustCompile(`(?m)^\s*import\s+(?:static\s+)?([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*(?:\.\*)?)\s*;`)
-	typePattern    = regexp.MustCompile(`\b(?:class|interface|enum|record)\s+([A-Za-z_][A-Za-z0-9_]*)\b|@interface\s+([A-Za-z_][A-Za-z0-9_]*)\b`)
+	packagePattern        = regexp.MustCompile(`(?m)^\s*package\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*;`)
+	importPattern         = regexp.MustCompile(`(?m)^\s*import\s+(?:static\s+)?([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*(?:\.\*)?)\s*;`)
+	typePattern           = regexp.MustCompile(`\b(?:class|interface|enum|record)\s+([A-Za-z_][A-Za-z0-9_]*)\b|@interface\s+([A-Za-z_][A-Za-z0-9_]*)\b`)
+	identifierTypePattern = regexp.MustCompile(`\b[A-Z][A-Za-z0-9_]*\b`)
 )
 
 // ParsePackageDeclaration extracts the Java package from source code.
@@ -205,4 +206,40 @@ func simpleTypeName(path string) string {
 		return ""
 	}
 	return parts[len(parts)-1]
+}
+
+// ExtractTypeIdentifiers returns referenced type-like identifiers in Java source.
+func ExtractTypeIdentifiers(sourceCode []byte) []string {
+	cleaned := stripJavaCommentsAndStrings(string(sourceCode))
+	matches := identifierTypePattern.FindAllString(cleaned, -1)
+	if len(matches) == 0 {
+		return []string{}
+	}
+
+	seen := make(map[string]bool, len(matches))
+	result := make([]string, 0, len(matches))
+	for _, m := range matches {
+		if seen[m] {
+			continue
+		}
+		seen[m] = true
+		result = append(result, m)
+	}
+	return result
+}
+
+func stripJavaCommentsAndStrings(s string) string {
+	// Remove block comments.
+	reBlock := regexp.MustCompile(`(?s)/\*.*?\*/`)
+	s = reBlock.ReplaceAllString(s, " ")
+	// Remove line comments.
+	reLine := regexp.MustCompile(`(?m)//.*$`)
+	s = reLine.ReplaceAllString(s, " ")
+	// Remove string literals.
+	reString := regexp.MustCompile(`"(?:\\.|[^"\\])*"`)
+	s = reString.ReplaceAllString(s, " ")
+	// Remove char literals.
+	reChar := regexp.MustCompile(`'(?:\\.|[^'\\])'`)
+	s = reChar.ReplaceAllString(s, " ")
+	return s
 }

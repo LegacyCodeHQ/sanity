@@ -11,13 +11,14 @@ import (
 func BuildJavaIndices(
 	javaFiles []string,
 	contentReader vcs.ContentReader,
-) (map[string][]string, map[string]map[string][]string) {
+) (map[string][]string, map[string]map[string][]string, map[string]string) {
 	if len(javaFiles) == 0 {
-		return nil, nil
+		return nil, nil, make(map[string]string)
 	}
 
 	packageToFiles := make(map[string][]string)
 	packageToTypes := make(map[string]map[string][]string)
+	fileToPackage := make(map[string]string)
 
 	for _, filePath := range javaFiles {
 		absPath, err := filepath.Abs(filePath)
@@ -34,6 +35,7 @@ func BuildJavaIndices(
 		if pkg == "" {
 			continue
 		}
+		fileToPackage[absPath] = pkg
 
 		packageToFiles[pkg] = append(packageToFiles[pkg], absPath)
 
@@ -55,7 +57,7 @@ func BuildJavaIndices(
 		}
 	}
 
-	return packageToFiles, packageToTypes
+	return packageToFiles, packageToTypes, fileToPackage
 }
 
 // ResolveJavaProjectImports resolves Java project imports for a single file.
@@ -64,6 +66,7 @@ func ResolveJavaProjectImports(
 	_ string,
 	javaPackageIndex map[string][]string,
 	javaPackageTypes map[string]map[string][]string,
+	javaFilePackages map[string]string,
 	suppliedFiles map[string]bool,
 	contentReader vcs.ContentReader,
 ) ([]string, error) {
@@ -86,6 +89,15 @@ func ResolveJavaProjectImports(
 		}
 		projectImports = append(projectImports, resolveJavaImportPath(absPath, internalImp, javaPackageIndex, javaPackageTypes, suppliedFiles)...)
 	}
+
+	samePackageDeps := resolveJavaSamePackageDependencies(
+		absPath,
+		content,
+		javaFilePackages,
+		javaPackageTypes,
+		imports,
+		suppliedFiles)
+	projectImports = append(projectImports, samePackageDeps...)
 
 	return projectImports, nil
 }
@@ -132,4 +144,67 @@ func resolveJavaImportPath(
 	}
 
 	return resolved
+}
+
+func resolveJavaSamePackageDependencies(
+	sourceFile string,
+	sourceContent []byte,
+	filePackages map[string]string,
+	packageTypeIndex map[string]map[string][]string,
+	imports []JavaImport,
+	suppliedFiles map[string]bool,
+) []string {
+	pkg, ok := filePackages[sourceFile]
+	if !ok {
+		return []string{}
+	}
+
+	typeIndex, ok := packageTypeIndex[pkg]
+	if !ok {
+		return []string{}
+	}
+
+	typeReferences := ExtractTypeIdentifiers(sourceContent)
+	if len(typeReferences) == 0 {
+		return []string{}
+	}
+
+	importedNames := make(map[string]bool)
+	for _, imp := range imports {
+		if imp.IsWildcard() {
+			continue
+		}
+		name := simpleTypeName(imp.Path())
+		if name != "" {
+			importedNames[name] = true
+		}
+	}
+
+	declaredNames := make(map[string]bool)
+	for _, name := range ParseTopLevelTypeNames(sourceContent) {
+		if name != "" {
+			declaredNames[name] = true
+		}
+	}
+
+	seen := make(map[string]bool)
+	deps := []string{}
+	for _, ref := range typeReferences {
+		if importedNames[ref] || declaredNames[ref] {
+			continue
+		}
+		files, ok := typeIndex[ref]
+		if !ok {
+			continue
+		}
+		for _, depFile := range files {
+			if depFile == sourceFile || !suppliedFiles[depFile] || seen[depFile] {
+				continue
+			}
+			seen[depFile] = true
+			deps = append(deps, depFile)
+		}
+	}
+
+	return deps
 }

@@ -24,6 +24,7 @@ type defaultDependencyResolver struct {
 	goImportResolver   *golang.ProjectImportResolver
 	javaPackageIndex   map[string][]string
 	javaPackageTypes   map[string]map[string][]string
+	javaFilePackages   map[string]string
 	kotlinPackageIndex map[string][]string
 	kotlinPackageTypes map[string]map[string][]string
 	kotlinFilePackages map[string]string
@@ -33,7 +34,7 @@ type defaultDependencyResolver struct {
 // NewDefaultDependencyResolver creates the built-in language-aware dependency resolver.
 func NewDefaultDependencyResolver(ctx *dependencyGraphContext, contentReader vcs.ContentReader) DependencyResolver {
 	goImportResolver := golang.NewProjectImportResolver(ctx.dirToFiles, ctx.suppliedFiles, contentReader)
-	javaPackageIndex, javaPackageTypes := java.BuildJavaIndices(ctx.javaFiles, contentReader)
+	javaPackageIndex, javaPackageTypes, javaFilePackages := java.BuildJavaIndices(ctx.javaFiles, contentReader)
 	kotlinPackageIndex, kotlinPackageTypes, kotlinFilePackages := kotlin.BuildKotlinIndices(ctx.kotlinFiles, contentReader)
 
 	resolver := &defaultDependencyResolver{
@@ -42,6 +43,7 @@ func NewDefaultDependencyResolver(ctx *dependencyGraphContext, contentReader vcs
 		goImportResolver:   goImportResolver,
 		javaPackageIndex:   javaPackageIndex,
 		javaPackageTypes:   javaPackageTypes,
+		javaFilePackages:   javaFilePackages,
 		kotlinPackageIndex: kotlinPackageIndex,
 		kotlinPackageTypes: kotlinPackageTypes,
 		kotlinFilePackages: kotlinFilePackages,
@@ -87,6 +89,7 @@ func (b *defaultDependencyResolver) resolveJavaImports(absPath, filePath, _ stri
 		filePath,
 		b.javaPackageIndex,
 		b.javaPackageTypes,
+		b.javaFilePackages,
 		b.ctx.suppliedFiles,
 		b.contentReader)
 }

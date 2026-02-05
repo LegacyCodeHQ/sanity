@@ -399,6 +399,38 @@ public class Helper {}
 	assert.Empty(t, adj[helperPath])
 }
 
+func TestBuildDependencyGraph_JavaSamePackageInference(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	srcMain := filepath.Join(tmpDir, "src", "main", "java", "com", "example", "model")
+	require.NoError(t, os.MkdirAll(srcMain, 0o755))
+
+	cartPath := filepath.Join(srcMain, "Cart.java")
+	cartContent := `package com.example.model;
+
+public class Cart {
+    private PaymentMethod paymentMethod;
+}
+`
+	require.NoError(t, os.WriteFile(cartPath, []byte(cartContent), 0o644))
+
+	paymentPath := filepath.Join(srcMain, "PaymentMethod.java")
+	paymentContent := `package com.example.model;
+
+public class PaymentMethod {}
+`
+	require.NoError(t, os.WriteFile(paymentPath, []byte(paymentContent), 0o644))
+
+	files := []string{cartPath, paymentPath}
+	graph, err := depgraph.BuildDependencyGraph(files, vcs.FilesystemContentReader())
+	require.NoError(t, err)
+
+	adj := mustAdjacency(t, graph)
+	require.Len(t, adj, 2)
+	assert.Contains(t, adj[cartPath], paymentPath)
+	assert.Empty(t, adj[paymentPath])
+}
+
 func TestBuildDependencyGraph_MixedDartAndGo(t *testing.T) {
 	// Create temporary directory with mixed files
 	tmpDir := t.TempDir()

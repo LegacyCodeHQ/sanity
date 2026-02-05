@@ -56,3 +56,21 @@ func TestIsTestFile(t *testing.T) {
 	assert.True(t, IsTestFile("/project/module/test/com/example/AppTests.java"))
 	assert.False(t, IsTestFile("/project/src/main/java/com/example/App.java"))
 }
+
+func TestExtractTypeIdentifiers(t *testing.T) {
+	src := []byte(`package com.example.model;
+
+public class Cart {
+    private PaymentMethod paymentMethod;
+    // DeliveryOption should be ignored in comments
+    private String note = "Money should be ignored in string";
+}
+`)
+
+	identifiers := ExtractTypeIdentifiers(src)
+	assert.Contains(t, identifiers, "Cart")
+	assert.Contains(t, identifiers, "PaymentMethod")
+	assert.Contains(t, identifiers, "String")
+	assert.NotContains(t, identifiers, "DeliveryOption")
+	assert.NotContains(t, identifiers, "Money")
+}

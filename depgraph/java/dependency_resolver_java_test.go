@@ -33,13 +33,45 @@ public class Helper {}
 
 	reader := vcs.FilesystemContentReader()
 	indicesFiles := []string{appPath, helperPath}
-	pkgIndex, typeIndex := BuildJavaIndices(indicesFiles, reader)
+	pkgIndex, typeIndex, filePackages := BuildJavaIndices(indicesFiles, reader)
 	supplied := map[string]bool{
 		appPath:    true,
 		helperPath: true,
 	}
 
-	imports, err := ResolveJavaProjectImports(appPath, appPath, pkgIndex, typeIndex, supplied, reader)
+	imports, err := ResolveJavaProjectImports(appPath, appPath, pkgIndex, typeIndex, filePackages, supplied, reader)
 	require.NoError(t, err)
 	assert.Equal(t, []string{helperPath}, imports)
+}
+
+func TestResolveJavaProjectImports_SamePackageInference(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcDir := filepath.Join(tmpDir, "src", "main", "java", "com", "example", "model")
+	require.NoError(t, os.MkdirAll(srcDir, 0o755))
+
+	cartPath := filepath.Join(srcDir, "Cart.java")
+	require.NoError(t, os.WriteFile(cartPath, []byte(`package com.example.model;
+
+public class Cart {
+    private PaymentMethod paymentMethod;
+}
+`), 0o644))
+
+	paymentPath := filepath.Join(srcDir, "PaymentMethod.java")
+	require.NoError(t, os.WriteFile(paymentPath, []byte(`package com.example.model;
+
+public class PaymentMethod {}
+`), 0o644))
+
+	reader := vcs.FilesystemContentReader()
+	files := []string{cartPath, paymentPath}
+	pkgIndex, typeIndex, filePackages := BuildJavaIndices(files, reader)
+	supplied := map[string]bool{
+		cartPath:    true,
+		paymentPath: true,
+	}
+
+	imports, err := ResolveJavaProjectImports(cartPath, cartPath, pkgIndex, typeIndex, filePackages, supplied, reader)
+	require.NoError(t, err)
+	assert.Contains(t, imports, paymentPath)
 }
