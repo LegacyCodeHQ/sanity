@@ -17,7 +17,7 @@ func NewFormatter(format string) (formatters.Formatter, error) {
 
 	switch f {
 	case formatters.OutputFormatDOT:
-		return &dot.DOTFormatter{}, nil
+		return &dot.Formatter{}, nil
 	case formatters.OutputFormatMermaid:
 		return &mermaid.MermaidFormatter{}, nil
 	default:

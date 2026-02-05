@@ -11,11 +11,11 @@ import (
 	"github.com/LegacyCodeHQ/sanity/depgraph"
 )
 
-// DOTFormatter formats dependency graphs as Graphviz DOT.
-type DOTFormatter struct{}
+// Formatter formats dependency graphs as Graphviz DOT.
+type Formatter struct{}
 
 // Format converts the dependency graph to Graphviz DOT format.
-func (f *DOTFormatter) Format(g depgraph.DependencyGraph, opts formatters.FormatOptions) (string, error) {
+func (f *Formatter) Format(g depgraph.DependencyGraph, opts formatters.FormatOptions) (string, error) {
 	var sb strings.Builder
 	sb.WriteString("digraph dependencies {\n")
 	sb.WriteString("  rankdir=LR;\n")
@@ -172,7 +172,7 @@ func (f *DOTFormatter) Format(g depgraph.DependencyGraph, opts formatters.Format
 }
 
 // GenerateURL creates a GraphvizOnline URL with the DOT graph embedded.
-func (f *DOTFormatter) GenerateURL(output string) (string, bool) {
+func (f *Formatter) GenerateURL(output string) (string, bool) {
 	encoded := url.PathEscape(output)
 	return fmt.Sprintf("https://dreampuf.github.io/GraphvizOnline/?engine=dot#%s", encoded), true
 }
