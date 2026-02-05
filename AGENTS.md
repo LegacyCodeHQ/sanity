@@ -45,11 +45,12 @@ Follow the established history patterns:
 - Prefer these types (use only when accurate):
   - `feat`: user-visible feature
   - `fix`: bug fix or correctness issue
+  - `lint`: lint-only fixes and style-rule compliance
   - `refactor`: behavior-preserving code restructuring
   - `test`: tests or fixtures only
   - `docs`: documentation only
   - `build`: build system or tooling changes
   - `ci`: CI pipeline changes
   - `chore`: non-functional maintenance (e.g., syncs)
-  - `style`: formatting or lint-only changes
+  - `style`: formatting-only changes (non-lint)
   - `human`: human-led or non-mechanical changes (use sparingly)
