@@ -1,0 +1,20 @@
+digraph dependencies {
+  rankdir=LR;
+  node [shape=box];
+  label="sanity • 296c9a6 • 5 files";
+  labelloc=t;
+  labeljust=l;
+  fontsize=10;
+  fontname=Courier;
+
+  "dependency_graph.go" [label="dependency_graph.go\n+180 -23", style=filled, fillcolor=white];
+  "dependency_graph_test.go" [label="dependency_graph_test.go\n+265", style=filled, fillcolor=lightgreen];
+  "go_parser.go" [label="🪴 go_parser.go\n+159", style=filled, fillcolor=white];
+  "go_parser_test.go" [label="🪴 go_parser_test.go\n+283", style=filled, fillcolor=lightgreen];
+  "go_symbols.go" [label="🪴 go_symbols.go\n+191", style=filled, fillcolor=white];
+
+  "dependency_graph.go" -> "go_parser.go";
+  "dependency_graph.go" -> "go_symbols.go";
+  "dependency_graph_test.go" -> "dependency_graph.go";
+  "go_parser_test.go" -> "go_parser.go";
+}

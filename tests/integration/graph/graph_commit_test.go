@@ -34,3 +34,10 @@ func TestGraphCommit_VerifyCrossTypeRelationships(t *testing.T) {
 	g := testhelpers.DotGoldie(t)
 	g.Assert(t, t.Name(), []byte(output))
 }
+
+func TestGraphCommit_VerifyMultipleTestFiles(t *testing.T) {
+	output := internal.GraphSubcommand(t, "296c9a6b26bab88aaaff57e4cfca40efe10754c1")
+
+	g := testhelpers.DotGoldie(t)
+	g.Assert(t, t.Name(), []byte(output))
+}
