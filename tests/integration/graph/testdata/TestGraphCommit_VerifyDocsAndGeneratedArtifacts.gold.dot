@@ -1,0 +1,21 @@
+digraph dependencies {
+  rankdir=LR;
+  node [shape=box];
+  label="sanity • e1a0ef9 • 8 files";
+  labelloc=t;
+  labeljust=l;
+  fontsize=10;
+  fontname=Courier;
+
+  ".gitattributes" [label=".gitattributes\n+3 -3", style=filled, fillcolor=lightyellow];
+  "language-parsing.md" [label="language-parsing.md\n+11 -7", style=filled, fillcolor=lightsalmon];
+  "dart_parser.go" [label="dart_parser.go\n+3 -3", style=filled, fillcolor=white];
+  "binding.go" [label="binding.go\n+1 -1", style=filled, fillcolor=white];
+  "binding_test.go" [label="binding_test.go\n+3 -3", style=filled, fillcolor=lightgreen];
+  "parser.c" [label="parser.c", style=filled, fillcolor=lightblue];
+  "parser.h" [label="parser.h", style=filled, fillcolor=lightcyan];
+  "scanner.c" [label="scanner.c", style=filled, fillcolor=lightblue];
+
+  "dart_parser.go" -> "binding.go";
+  "binding_test.go" -> "binding.go";
+}
