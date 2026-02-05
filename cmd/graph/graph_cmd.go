@@ -82,266 +82,45 @@ Examples:
 }
 
 func runGraph(cmd *cobra.Command, opts *graphOptions) error {
-	var filePaths []string
-	var err error
-
-	// Track commit range info for use throughout the function
-	var fromCommit, toCommit string
-	var isCommitRange bool
-
-	// Validate --between cannot be used with --input
-	if len(opts.betweenFiles) > 0 && len(opts.includes) > 0 {
-		return fmt.Errorf("--between cannot be used with --input flag")
+	if err := validateGraphOptions(opts); err != nil {
+		return err
 	}
 
-	// Validate --file cannot be used with --between or --input
-	if opts.targetFile != "" {
-		if len(opts.betweenFiles) > 0 {
-			return fmt.Errorf("--file cannot be used with --between flag")
-		}
-		if len(opts.includes) > 0 {
-			return fmt.Errorf("--file cannot be used with --input flag")
-		}
-		if opts.depthLevel < 1 {
-			return fmt.Errorf("--level must be at least 1")
-		}
+	ensureRepoPath(opts)
+
+	fromCommit, toCommit, isCommitRange, err := parseCommitRange(opts)
+	if err != nil {
+		return err
 	}
 
-	// Default to current directory for git operations if not specified
-	if opts.repoPath == "" {
-		opts.repoPath = "."
+	filePaths, done, err := determineFilePaths(cmd, opts, fromCommit, toCommit, isCommitRange)
+	if err != nil {
+		return err
+	}
+	if done {
+		return nil
 	}
 
-	// Parse commit range if --commit is specified
-	if opts.commitID != "" {
-		fromCommit, toCommit, isCommitRange = git.ParseCommitRange(opts.commitID)
-
-		if isCommitRange {
-			// Normalize commit range to chronological order (older...newer)
-			fromCommit, toCommit, _, err = git.NormalizeCommitRange(opts.repoPath, fromCommit, toCommit)
-			if err != nil {
-				return fmt.Errorf("failed to normalize commit range: %w", err)
-			}
-		}
-	}
-
-	// Determine file paths based on flags
-	if len(opts.includes) > 0 {
-		// Explicit file/directory mode - expand directories recursively
-		filePaths, err = expandPaths(opts.includes)
-		if err != nil {
-			return fmt.Errorf("failed to expand paths: %w", err)
-		}
-
-		if len(filePaths) == 0 {
-			return fmt.Errorf("no supported files found in specified paths")
-		}
-	} else if len(opts.betweenFiles) > 0 {
-		// When --between is provided, get all files to build the full graph
-		if opts.commitID != "" {
-			// With --commit, get all files from that commit's tree
-			filePaths, err = git.GetCommitTreeFiles(opts.repoPath, toCommit)
-			if err != nil {
-				return fmt.Errorf("failed to get files from commit tree: %w", err)
-			}
-
-			if len(filePaths) == 0 {
-				return fmt.Errorf("no files found in commit %s", toCommit)
-			}
-		} else {
-			// Without --commit, expand all files in working directory
-			filePaths, err = expandPaths([]string{opts.repoPath})
-			if err != nil {
-				return fmt.Errorf("failed to expand working directory: %w", err)
-			}
-
-			if len(filePaths) == 0 {
-				return fmt.Errorf("no supported files found in working directory")
-			}
-		}
-	} else if opts.commitID != "" {
-		// Commit mode without explicit files - get files changed in commit
-		if isCommitRange {
-			filePaths, err = git.GetCommitRangeFiles(opts.repoPath, fromCommit, toCommit)
-			if err != nil {
-				return fmt.Errorf("failed to get files from commit range: %w", err)
-			}
-
-			if len(filePaths) == 0 {
-				return fmt.Errorf("no files changed in commit range %s", opts.commitID)
-			}
-		} else {
-			filePaths, err = git.GetCommitDartFiles(opts.repoPath, toCommit)
-			if err != nil {
-				return fmt.Errorf("failed to get files from commit: %w", err)
-			}
-
-			if len(filePaths) == 0 {
-				return fmt.Errorf("no files changed in commit %s", toCommit)
-			}
-		}
-	} else if opts.targetFile != "" {
-		// When --file is provided, expand all files in working directory to build full graph
-		filePaths, err = expandPaths([]string{opts.repoPath})
-		if err != nil {
-			return fmt.Errorf("failed to expand working directory: %w", err)
-		}
-
-		if len(filePaths) == 0 {
-			return fmt.Errorf("no supported files found in working directory")
-		}
-	} else {
-		// Default: uncommitted files mode
-		filePaths, err = git.GetUncommittedFiles(opts.repoPath)
-		if err != nil {
-			return fmt.Errorf("failed to get uncommitted files: %w", err)
-		}
-
-		if len(filePaths) == 0 {
-			fmt.Fprintln(cmd.OutOrStdout(), "Working directory is clean (no uncommitted changes).")
-			fmt.Fprintln(cmd.OutOrStdout())
-			fmt.Fprintln(cmd.OutOrStdout(), "To visualize the most recent commit:")
-			fmt.Fprintln(cmd.OutOrStdout(), "  sanity graph -c HEAD")
-			fmt.Fprintln(cmd.OutOrStdout())
-			fmt.Fprintln(cmd.OutOrStdout(), "To visualize a specific commit:")
-			fmt.Fprintln(cmd.OutOrStdout(), "  sanity graph -c <commit-hash>")
-			return nil
-		}
-	}
-
-	// Build the dependency graph
-	// Create the appropriate content reader based on whether we're analyzing a commit
-	// When --file is used without --commit, use filesystem reader for current state
-	var contentReader vcs.ContentReader
-	if toCommit != "" && opts.targetFile == "" {
-		contentReader = git.GitCommitContentReader(opts.repoPath, toCommit)
-	} else {
-		contentReader = vcs.FilesystemContentReader()
-	}
+	contentReader := selectContentReader(opts, toCommit)
 
 	graph, err := parsers.BuildDependencyGraph(filePaths, contentReader)
 	if err != nil {
 		return fmt.Errorf("failed to build dependency graph: %w", err)
 	}
 
-	// Apply level filtering if --file flag is provided
-	if opts.targetFile != "" {
-		// Resolve the target file to absolute path
-		absTargetFile, err := filepath.Abs(opts.targetFile)
-		if err != nil {
-			return fmt.Errorf("failed to resolve file path: %w", err)
-		}
-
-		// Verify the target file exists in the graph
-		if _, ok := graph[absTargetFile]; !ok {
-			return fmt.Errorf("file not found in graph: %s", opts.targetFile)
-		}
-
-		// Filter graph to only include nodes within the specified level
-		graph = filterGraphByLevel(graph, absTargetFile, opts.depthLevel)
-
-		// Update filePaths to match filtered graph for accurate file count
-		filePaths = make([]string, 0, len(graph))
-		for f := range graph {
-			filePaths = append(filePaths, f)
-		}
+	graph, filePaths, err = applyTargetFileFilter(opts, graph, filePaths)
+	if err != nil {
+		return err
 	}
 
-	// Apply path filtering if --between flag is provided
-	if len(opts.betweenFiles) > 0 {
-		// Resolve paths to absolute paths and validate they exist in the graph
-		resolvedPaths, missingPaths := resolveAndValidatePaths(opts.betweenFiles, graph)
-		if len(missingPaths) > 0 {
-			return fmt.Errorf("files not found in graph: %v", missingPaths)
-		}
-		if len(resolvedPaths) < 2 {
-			return fmt.Errorf("at least 2 files required for --between, found %d in graph", len(resolvedPaths))
-		}
-		graph = parsers.FindPathNodes(graph, resolvedPaths)
-
-		// Update filePaths to match filtered graph for accurate file count
-		filePaths = make([]string, 0, len(graph))
-		for f := range graph {
-			filePaths = append(filePaths, f)
-		}
+	graph, filePaths, err = applyBetweenFilter(opts, graph, filePaths)
+	if err != nil {
+		return err
 	}
 
-	// Get file statistics for DOT/Mermaid formats
-	var fileStats map[string]vcs.FileStats
 	format, _ := formatters.ParseOutputFormat(opts.outputFormat)
-	if (format == formatters.OutputFormatDOT || format == formatters.OutputFormatMermaid) && opts.repoPath != "" {
-		if opts.commitID != "" {
-			if isCommitRange {
-				// Get stats for commit range
-				fileStats, err = git.GetCommitRangeFileStats(opts.repoPath, fromCommit, toCommit)
-			} else {
-				// Get stats for single commit
-				fileStats, err = git.GetCommitFileStats(opts.repoPath, toCommit)
-			}
-			if err != nil {
-				// Don't fail if we can't get stats, just log and continue without them
-				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to get file statistics: %v\n", err)
-			}
-		} else {
-			// Get stats for uncommitted changes
-			fileStats, err = git.GetUncommittedFileStats(opts.repoPath)
-			if err != nil {
-				// Don't fail if we can't get stats, just log and continue without them
-				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to get file statistics: %v\n", err)
-			}
-		}
-	}
-
-	// Build label with commit hash and dirty status for DOT/Mermaid formats
-	var label string
-	if format == formatters.OutputFormatDOT || format == formatters.OutputFormatMermaid {
-		// Determine the repo path to use (use current directory if not specified)
-		labelRepoPath := opts.repoPath
-		if labelRepoPath == "" {
-			labelRepoPath = "."
-		}
-
-		// Get repository root and extract directory name
-		repoRoot, err := git.GetRepositoryRoot(labelRepoPath)
-		if err == nil {
-			projectName := filepath.Base(repoRoot)
-			label = fmt.Sprintf("%s • ", projectName)
-		}
-
-		// Get commit hash or range label
-		var commitLabel string
-		if opts.commitID != "" {
-			if isCommitRange {
-				// When analyzing a commit range, show "abc123...def456"
-				commitLabel, err = git.GetCommitRangeLabel(labelRepoPath, fromCommit, toCommit)
-			} else {
-				// When analyzing a specific commit, show that commit's hash
-				commitLabel, err = git.GetShortCommitHash(labelRepoPath, toCommit)
-			}
-		} else {
-			// When analyzing uncommitted changes, show current HEAD
-			commitLabel, err = git.GetCurrentCommitHash(labelRepoPath)
-		}
-		if err == nil {
-			label += commitLabel
-
-			// Only check for uncommitted changes when analyzing current state (not a specific commit)
-			if opts.commitID == "" {
-				isDirty, err := git.HasUncommittedChanges(labelRepoPath)
-				if err == nil && isDirty {
-					label += "-dirty"
-				}
-			}
-
-			// Add number of files changed
-			fileCount := len(filePaths)
-			if fileCount == 1 {
-				label += fmt.Sprintf(" • %d file", fileCount)
-			} else {
-				label += fmt.Sprintf(" • %d files", fileCount)
-			}
-		}
-	}
+	fileStats := collectFileStats(cmd, opts, format, fromCommit, toCommit, isCommitRange)
+	label := buildGraphLabel(opts, format, fromCommit, toCommit, isCommitRange, filePaths)
 
 	// Create formatter and generate output
 	formatter, err := NewFormatter(opts.outputFormat)
@@ -359,7 +138,291 @@ func runGraph(cmd *cobra.Command, opts *graphOptions) error {
 		return fmt.Errorf("failed to format graph: %w", err)
 	}
 
-	// Handle URL generation and output
+	return emitOutput(cmd, opts, format, formatter, output)
+}
+
+func validateGraphOptions(opts *graphOptions) error {
+	if len(opts.betweenFiles) > 0 && len(opts.includes) > 0 {
+		return fmt.Errorf("--between cannot be used with --input flag")
+	}
+
+	if opts.targetFile != "" {
+		if len(opts.betweenFiles) > 0 {
+			return fmt.Errorf("--file cannot be used with --between flag")
+		}
+		if len(opts.includes) > 0 {
+			return fmt.Errorf("--file cannot be used with --input flag")
+		}
+		if opts.depthLevel < 1 {
+			return fmt.Errorf("--level must be at least 1")
+		}
+	}
+
+	return nil
+}
+
+func ensureRepoPath(opts *graphOptions) {
+	if opts.repoPath == "" {
+		opts.repoPath = "."
+	}
+}
+
+func parseCommitRange(opts *graphOptions) (string, string, bool, error) {
+	var fromCommit, toCommit string
+	var isCommitRange bool
+
+	if opts.commitID == "" {
+		return "", "", false, nil
+	}
+
+	fromCommit, toCommit, isCommitRange = git.ParseCommitRange(opts.commitID)
+	if !isCommitRange {
+		return fromCommit, toCommit, isCommitRange, nil
+	}
+
+	fromCommit, toCommit, _, err := git.NormalizeCommitRange(opts.repoPath, fromCommit, toCommit)
+	if err != nil {
+		return "", "", false, fmt.Errorf("failed to normalize commit range: %w", err)
+	}
+
+	return fromCommit, toCommit, isCommitRange, nil
+}
+
+func determineFilePaths(cmd *cobra.Command, opts *graphOptions, fromCommit, toCommit string, isCommitRange bool) ([]string, bool, error) {
+	if len(opts.includes) > 0 {
+		filePaths, err := expandPaths(opts.includes)
+		if err != nil {
+			return nil, false, fmt.Errorf("failed to expand paths: %w", err)
+		}
+		if len(filePaths) == 0 {
+			return nil, false, fmt.Errorf("no supported files found in specified paths")
+		}
+		return filePaths, false, nil
+	}
+
+	if len(opts.betweenFiles) > 0 {
+		filePaths, err := collectBetweenFilePaths(opts, toCommit)
+		if err != nil {
+			return nil, false, err
+		}
+		return filePaths, false, nil
+	}
+
+	if opts.commitID != "" {
+		filePaths, err := collectCommitFilePaths(opts, fromCommit, toCommit, isCommitRange)
+		if err != nil {
+			return nil, false, err
+		}
+		return filePaths, false, nil
+	}
+
+	if opts.targetFile != "" {
+		filePaths, err := expandPaths([]string{opts.repoPath})
+		if err != nil {
+			return nil, false, fmt.Errorf("failed to expand working directory: %w", err)
+		}
+		if len(filePaths) == 0 {
+			return nil, false, fmt.Errorf("no supported files found in working directory")
+		}
+		return filePaths, false, nil
+	}
+
+	filePaths, err := git.GetUncommittedFiles(opts.repoPath)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to get uncommitted files: %w", err)
+	}
+
+	if len(filePaths) == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "Working directory is clean (no uncommitted changes).")
+		fmt.Fprintln(cmd.OutOrStdout())
+		fmt.Fprintln(cmd.OutOrStdout(), "To visualize the most recent commit:")
+		fmt.Fprintln(cmd.OutOrStdout(), "  sanity graph -c HEAD")
+		fmt.Fprintln(cmd.OutOrStdout())
+		fmt.Fprintln(cmd.OutOrStdout(), "To visualize a specific commit:")
+		fmt.Fprintln(cmd.OutOrStdout(), "  sanity graph -c <commit-hash>")
+		return nil, true, nil
+	}
+
+	return filePaths, false, nil
+}
+
+func collectBetweenFilePaths(opts *graphOptions, toCommit string) ([]string, error) {
+	if opts.commitID != "" {
+		filePaths, err := git.GetCommitTreeFiles(opts.repoPath, toCommit)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get files from commit tree: %w", err)
+		}
+		if len(filePaths) == 0 {
+			return nil, fmt.Errorf("no files found in commit %s", toCommit)
+		}
+		return filePaths, nil
+	}
+
+	filePaths, err := expandPaths([]string{opts.repoPath})
+	if err != nil {
+		return nil, fmt.Errorf("failed to expand working directory: %w", err)
+	}
+	if len(filePaths) == 0 {
+		return nil, fmt.Errorf("no supported files found in working directory")
+	}
+	return filePaths, nil
+}
+
+func collectCommitFilePaths(opts *graphOptions, fromCommit, toCommit string, isCommitRange bool) ([]string, error) {
+	if isCommitRange {
+		filePaths, err := git.GetCommitRangeFiles(opts.repoPath, fromCommit, toCommit)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get files from commit range: %w", err)
+		}
+		if len(filePaths) == 0 {
+			return nil, fmt.Errorf("no files changed in commit range %s", opts.commitID)
+		}
+		return filePaths, nil
+	}
+
+	filePaths, err := git.GetCommitDartFiles(opts.repoPath, toCommit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get files from commit: %w", err)
+	}
+	if len(filePaths) == 0 {
+		return nil, fmt.Errorf("no files changed in commit %s", toCommit)
+	}
+	return filePaths, nil
+}
+
+func selectContentReader(opts *graphOptions, toCommit string) vcs.ContentReader {
+	if toCommit != "" && opts.targetFile == "" {
+		return git.GitCommitContentReader(opts.repoPath, toCommit)
+	}
+	return vcs.FilesystemContentReader()
+}
+
+func applyTargetFileFilter(opts *graphOptions, graph parsers.DependencyGraph, filePaths []string) (parsers.DependencyGraph, []string, error) {
+	if opts.targetFile == "" {
+		return graph, filePaths, nil
+	}
+
+	absTargetFile, err := filepath.Abs(opts.targetFile)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to resolve file path: %w", err)
+	}
+
+	if _, ok := graph[absTargetFile]; !ok {
+		return nil, nil, fmt.Errorf("file not found in graph: %s", opts.targetFile)
+	}
+
+	graph = filterGraphByLevel(graph, absTargetFile, opts.depthLevel)
+	filePaths = graphFiles(graph)
+
+	return graph, filePaths, nil
+}
+
+func applyBetweenFilter(opts *graphOptions, graph parsers.DependencyGraph, filePaths []string) (parsers.DependencyGraph, []string, error) {
+	if len(opts.betweenFiles) == 0 {
+		return graph, filePaths, nil
+	}
+
+	resolvedPaths, missingPaths := resolveAndValidatePaths(opts.betweenFiles, graph)
+	if len(missingPaths) > 0 {
+		return nil, nil, fmt.Errorf("files not found in graph: %v", missingPaths)
+	}
+	if len(resolvedPaths) < 2 {
+		return nil, nil, fmt.Errorf("at least 2 files required for --between, found %d in graph", len(resolvedPaths))
+	}
+
+	graph = parsers.FindPathNodes(graph, resolvedPaths)
+	filePaths = graphFiles(graph)
+
+	return graph, filePaths, nil
+}
+
+func graphFiles(graph parsers.DependencyGraph) []string {
+	filePaths := make([]string, 0, len(graph))
+	for f := range graph {
+		filePaths = append(filePaths, f)
+	}
+	return filePaths
+}
+
+func collectFileStats(cmd *cobra.Command, opts *graphOptions, format formatters.OutputFormat, fromCommit, toCommit string, isCommitRange bool) map[string]vcs.FileStats {
+	if format != formatters.OutputFormatDOT && format != formatters.OutputFormatMermaid {
+		return nil
+	}
+
+	var (
+		fileStats map[string]vcs.FileStats
+		err       error
+	)
+
+	if opts.commitID != "" {
+		if isCommitRange {
+			fileStats, err = git.GetCommitRangeFileStats(opts.repoPath, fromCommit, toCommit)
+		} else {
+			fileStats, err = git.GetCommitFileStats(opts.repoPath, toCommit)
+		}
+	} else {
+		fileStats, err = git.GetUncommittedFileStats(opts.repoPath)
+	}
+
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to get file statistics: %v\n", err)
+		return nil
+	}
+
+	return fileStats
+}
+
+func buildGraphLabel(opts *graphOptions, format formatters.OutputFormat, fromCommit, toCommit string, isCommitRange bool, filePaths []string) string {
+	if format != formatters.OutputFormatDOT && format != formatters.OutputFormatMermaid {
+		return ""
+	}
+
+	labelRepoPath := opts.repoPath
+	if labelRepoPath == "" {
+		labelRepoPath = "."
+	}
+
+	var label string
+	repoRoot, err := git.GetRepositoryRoot(labelRepoPath)
+	if err == nil {
+		projectName := filepath.Base(repoRoot)
+		label = fmt.Sprintf("%s • ", projectName)
+	}
+
+	var commitLabel string
+	if opts.commitID != "" {
+		if isCommitRange {
+			commitLabel, err = git.GetCommitRangeLabel(labelRepoPath, fromCommit, toCommit)
+		} else {
+			commitLabel, err = git.GetShortCommitHash(labelRepoPath, toCommit)
+		}
+	} else {
+		commitLabel, err = git.GetCurrentCommitHash(labelRepoPath)
+	}
+
+	if err != nil {
+		return label
+	}
+
+	label += commitLabel
+	if opts.commitID == "" {
+		isDirty, err := git.HasUncommittedChanges(labelRepoPath)
+		if err == nil && isDirty {
+			label += "-dirty"
+		}
+	}
+
+	fileCount := len(filePaths)
+	if fileCount == 1 {
+		label += fmt.Sprintf(" • %d file", fileCount)
+	} else {
+		label += fmt.Sprintf(" • %d files", fileCount)
+	}
+
+	return label
+}
+
+func emitOutput(cmd *cobra.Command, opts *graphOptions, format formatters.OutputFormat, formatter formatters.Formatter, output string) error {
 	if opts.generateURL {
 		if urlStr, ok := formatter.GenerateURL(output); ok {
 			fmt.Fprintln(cmd.OutOrStdout(), urlStr)
@@ -371,7 +434,6 @@ func runGraph(cmd *cobra.Command, opts *graphOptions) error {
 		fmt.Fprintln(cmd.OutOrStdout(), output)
 	}
 
-	// Copy to clipboard if flag is enabled
 	if opts.copyToClipboard {
 		if err := clipboard.WriteAll(output); err != nil {
 			return fmt.Errorf("failed to copy to clipboard: %w", err)
