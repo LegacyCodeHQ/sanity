@@ -49,16 +49,46 @@ func NewDefaultDependencyResolver(ctx *dependencyGraphContext, contentReader vcs
 		kotlinFilePackages: kotlinFilePackages,
 	}
 
-	resolver.importResolvers = map[string]importResolverFunc{
-		".dart": resolver.resolveDartImports,
-		".go":   resolver.resolveGoImports,
-		".java": resolver.resolveJavaImports,
-		".kt":   resolver.resolveKotlinImports,
-		".ts":   resolver.resolveTypeScriptImports,
-		".tsx":  resolver.resolveTypeScriptImports,
-	}
+	resolver.importResolvers = resolver.buildImportResolversFromRegistry()
 
 	return resolver
+}
+
+func (b *defaultDependencyResolver) buildImportResolversFromRegistry() map[string]importResolverFunc {
+	importResolvers := make(map[string]importResolverFunc)
+
+	for _, ext := range SupportedLanguageExtensions() {
+		resolverKey, ok := resolverKeyForExtension(ext)
+		if !ok {
+			continue
+		}
+
+		resolverFunc, ok := b.resolveByResolverKey(resolverKey)
+		if !ok {
+			continue
+		}
+
+		importResolvers[ext] = resolverFunc
+	}
+
+	return importResolvers
+}
+
+func (b *defaultDependencyResolver) resolveByResolverKey(key languageResolverKey) (importResolverFunc, bool) {
+	switch key {
+	case languageResolverDart:
+		return b.resolveDartImports, true
+	case languageResolverGo:
+		return b.resolveGoImports, true
+	case languageResolverJava:
+		return b.resolveJavaImports, true
+	case languageResolverKotlin:
+		return b.resolveKotlinImports, true
+	case languageResolverTypeScript:
+		return b.resolveTypeScriptImports, true
+	default:
+		return nil, false
+	}
 }
 
 func (b *defaultDependencyResolver) SupportsFileExtension(ext string) bool {

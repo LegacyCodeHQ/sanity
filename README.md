@@ -99,6 +99,16 @@ sanity graph --repo /path/to/repo --commit HEAD~1
 sanity graph --input file1.dart,file2.dart,file3.dart
 ```
 
+#### `sanity languages`
+
+List supported languages and mapped file extensions for your installed Sanity version.
+
+**Example**:
+
+```bash
+sanity languages
+```
+
 #### Help
 
 - **List all commands**: `sanity --help`

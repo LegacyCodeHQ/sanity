@@ -474,16 +474,6 @@ func emitOutput(cmd *cobra.Command, opts *graphOptions, format formatters.Output
 	return nil
 }
 
-// supportedExtensions contains file extensions that the graph command can analyze
-var supportedExtensions = map[string]bool{
-	".dart": true,
-	".go":   true,
-	".java": true,
-	".kt":   true,
-	".ts":   true,
-	".tsx":  true,
-}
-
 // expandPaths expands file paths and directories into individual file paths.
 // Directories are recursively walked and regular files are included based on includeUnsupportedFiles.
 func expandPaths(paths []string, includeUnsupportedFiles bool) ([]string, error) {
@@ -513,7 +503,7 @@ func expandPaths(paths []string, includeUnsupportedFiles bool) ([]string, error)
 				}
 
 				ext := filepath.Ext(filePath)
-				if supportedExtensions[ext] {
+				if depgraph.IsSupportedLanguageExtension(ext) {
 					result = append(result, filePath)
 				}
 
@@ -537,7 +527,7 @@ func emitUnsupportedFileWarning(cmd *cobra.Command, filePaths []string) {
 
 	for _, filePath := range filePaths {
 		ext := filepath.Ext(filePath)
-		if supportedExtensions[ext] {
+		if depgraph.IsSupportedLanguageExtension(ext) {
 			continue
 		}
 
