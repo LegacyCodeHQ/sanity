@@ -27,3 +27,10 @@ func TestGraphCommit_VerifyAllNewFilesAndTestHighlight(t *testing.T) {
 	g := testhelpers.DotGoldie(t)
 	g.Assert(t, t.Name(), []byte(output))
 }
+
+func TestGraphCommit_VerifyCrossTypeRelationships(t *testing.T) {
+	output := internal.GraphSubcommand(t, "db68272e70a2733c65f58c5a36e438acd9134db8")
+
+	g := testhelpers.DotGoldie(t)
+	g.Assert(t, t.Name(), []byte(output))
+}
