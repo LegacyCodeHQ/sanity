@@ -50,6 +50,21 @@ func (level MaturityLevel) String() string {
 	}
 }
 
+func (level MaturityLevel) DisplayName() string {
+	switch level {
+	case MaturityVibed:
+		return "Vibed"
+	case MaturityBasicTesting:
+		return "Basic Testing"
+	case MaturityActiveTesting:
+		return "Active Testing"
+	case MaturityStable:
+		return "Stable"
+	default:
+		return "Unknown"
+	}
+}
+
 func (level MaturityLevel) Symbol() string {
 	switch level {
 	case MaturityVibed:
@@ -62,6 +77,16 @@ func (level MaturityLevel) Symbol() string {
 		return "✓"
 	default:
 		return "?"
+	}
+}
+
+// MaturityLevels returns the ordered set of known maturity levels.
+func MaturityLevels() []MaturityLevel {
+	return []MaturityLevel{
+		MaturityVibed,
+		MaturityBasicTesting,
+		MaturityActiveTesting,
+		MaturityStable,
 	}
 }
 

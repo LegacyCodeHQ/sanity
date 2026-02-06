@@ -7,6 +7,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/LegacyCodeHQ/sanity/depgraph"
+	"github.com/LegacyCodeHQ/sanity/depgraph/langsupport"
 )
 
 func TestLanguagesCommand_PrintsSupportedLanguagesAndExtensions(t *testing.T) {
@@ -32,7 +33,12 @@ func TestLanguagesCommand_PrintsSupportedLanguagesAndExtensions(t *testing.T) {
 	_ = writer.Flush()
 	expected.WriteString("\n")
 	expected.WriteString("----------------------------------------------------\n")
-	expected.WriteString("○ Vibed  ◐ Basic Testing  ● Active Testing  ✓ Stable\n")
+	legendParts := make([]string, 0, len(langsupport.MaturityLevels()))
+	for _, level := range langsupport.MaturityLevels() {
+		legendParts = append(legendParts, level.Symbol()+" "+level.DisplayName())
+	}
+	expected.WriteString(strings.Join(legendParts, "  "))
+	expected.WriteString("\n")
 	expected.WriteString("\n")
 
 	if out.String() != expected.String() {

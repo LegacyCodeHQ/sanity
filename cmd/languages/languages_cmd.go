@@ -6,6 +6,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/LegacyCodeHQ/sanity/depgraph"
+	"github.com/LegacyCodeHQ/sanity/depgraph/langsupport"
 	"github.com/spf13/cobra"
 )
 
@@ -58,7 +59,11 @@ func runLanguages(cmd *cobra.Command, _ []string) error {
 	if _, err := fmt.Fprintln(cmd.OutOrStdout(), "----------------------------------------------------"); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintln(cmd.OutOrStdout(), "○ Vibed  ◐ Basic Testing  ● Active Testing  ✓ Stable"); err != nil {
+	legendParts := make([]string, 0, len(langsupport.MaturityLevels()))
+	for _, level := range langsupport.MaturityLevels() {
+		legendParts = append(legendParts, fmt.Sprintf("%s %s", level.Symbol(), level.DisplayName()))
+	}
+	if _, err := fmt.Fprintln(cmd.OutOrStdout(), strings.Join(legendParts, "  ")); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(cmd.OutOrStdout()); err != nil {
