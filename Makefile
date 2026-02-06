@@ -1,4 +1,4 @@
-.PHONY: test test-update-golden test-coverage coverage coverage-html clean help build-dev release-check lint
+.PHONY: test test-update-golden test-coverage coverage coverage-html clean help build-dev release-check lint security
 
 # Version information (can be overridden via command line)
 # Try to get version from git tag, otherwise use "dev"
@@ -16,6 +16,7 @@ help:
 	@echo ""
 	@echo "Testing:"
 	@echo "  lint               - Run golangci-lint"
+	@echo "  vulncheck          - Run govulncheck"
 	@echo "  test               - Run all tests"
 	@echo "  test-update-golden - Update golden test fixtures"
 	@echo "  test-coverage      - Run tests with coverage percentage"
@@ -36,6 +37,11 @@ help:
 lint:
 	golangci-lint run ./...
 	go-consistent ./...
+
+# Run govulncheck
+security:
+	go install golang.org/x/vuln/cmd/govulncheck@latest
+	govulncheck ./...
 
 # Run all tests
 test:
