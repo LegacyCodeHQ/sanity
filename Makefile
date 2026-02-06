@@ -43,7 +43,7 @@ test:
 
 # Update golden test fixtures (only packages using goldie)
 test-update-golden:
-	go test ./tests/litmus/... ./cmd/graph/formatters/dot/... ./cmd/graph/formatters/mermaid/... -args -update
+	go test ./tests/litmus/... ./tests/integration/graph/... ./tests/languagespecs/java/examples/tests/... ./cmd/graph/formatters/dot/... ./cmd/graph/formatters/mermaid/... -args -update
 
 # Run tests with coverage percentage (excludes cmd packages which have no tests)
 test-coverage:

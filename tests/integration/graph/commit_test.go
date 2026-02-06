@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/LegacyCodeHQ/sanity/internal/testhelpers"
-	"github.com/LegacyCodeHQ/sanity/tests/integration/internal"
+	"github.com/LegacyCodeHQ/sanity/tests/internal"
 )
 
 func TestGraphCommit_VerifyGoEmbedRelationships(t *testing.T) {

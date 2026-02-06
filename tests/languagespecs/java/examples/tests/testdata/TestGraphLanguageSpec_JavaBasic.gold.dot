@@ -1,0 +1,18 @@
+digraph dependencies {
+  rankdir=LR;
+  node [shape=box];
+
+  "App.java" [label="App.java", style=filled, fillcolor=white];
+  "Cart.java" [label="Cart.java", style=filled, fillcolor=white];
+  "Discount.java" [label="Discount.java", style=filled, fillcolor=white];
+  "PaymentMethod.java" [label="PaymentMethod.java", style=filled, fillcolor=white];
+  "Helper.java" [label="Helper.java", style=filled, fillcolor=white];
+  "AppTest.java" [label="AppTest.java", style=filled, fillcolor=lightgreen];
+
+  "App.java" -> "Cart.java";
+  "App.java" -> "Discount.java";
+  "App.java" -> "PaymentMethod.java";
+  "App.java" -> "Helper.java";
+  "Cart.java" -> "Discount.java";
+  "Cart.java" -> "PaymentMethod.java";
+}
