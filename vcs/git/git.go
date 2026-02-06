@@ -57,8 +57,72 @@ func toAbsolutePaths(repoRoot string, relativePaths []string) []string {
 	return absolutePaths
 }
 
+func validateGitRef(ref string) error {
+	if ref == "" {
+		return fmt.Errorf("git reference cannot be empty")
+	}
+	if strings.HasPrefix(ref, "-") {
+		return fmt.Errorf("git reference cannot start with '-': %q", ref)
+	}
+	if strings.ContainsAny(ref, "\x00\n\r\t ") {
+		return fmt.Errorf("git reference contains whitespace or NUL: %q", ref)
+	}
+	return nil
+}
+
+func validateGitRelPath(path string) error {
+	if path == "" {
+		return fmt.Errorf("git path cannot be empty")
+	}
+	if filepath.IsAbs(path) {
+		return fmt.Errorf("git path must be relative: %q", path)
+	}
+	if strings.Contains(path, "\x00") {
+		return fmt.Errorf("git path contains NUL: %q", path)
+	}
+	cleaned := filepath.Clean(path)
+	if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("git path escapes repository: %q", path)
+	}
+	return nil
+}
+
+func validateGitRef(ref string) error {
+	if ref == "" {
+		return fmt.Errorf("git reference cannot be empty")
+	}
+	if strings.HasPrefix(ref, "-") {
+		return fmt.Errorf("git reference cannot start with '-' : %q", ref)
+	}
+	if strings.ContainsAny(ref, "\x00\n\r\t ") {
+		return fmt.Errorf("git reference contains whitespace or NUL: %q", ref)
+	}
+	return nil
+}
+
+func validateGitRelPath(path string) error {
+	if path == "" {
+		return fmt.Errorf("git path cannot be empty")
+	}
+	if filepath.IsAbs(path) {
+		return fmt.Errorf("git path must be relative: %q", path)
+	}
+	if strings.Contains(path, "\x00") {
+		return fmt.Errorf("git path contains NUL: %q", path)
+	}
+	cleaned := filepath.Clean(path)
+	if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("git path escapes repository: %q", path)
+	}
+	return nil
+}
+
 // validateCommit checks if the given commit reference exists in the repository
 func validateCommit(repoPath, commitID string) error {
+	if err := validateGitRef(commitID); err != nil {
+		return err
+	}
+
 	cmd := exec.Command("git", "rev-parse", "--verify", commitID+"^{commit}")
 	cmd.Dir = repoPath
 
@@ -97,6 +161,10 @@ func GetCurrentCommitHash(repoPath string) (string, error) {
 
 // GetShortCommitHash returns the short version of a given commit hash
 func GetShortCommitHash(repoPath, commitID string) (string, error) {
+	if err := validateGitRef(commitID); err != nil {
+		return "", err
+	}
+
 	cmd := exec.Command("git", "rev-parse", "--short", commitID)
 	cmd.Dir = repoPath
 
@@ -157,6 +225,13 @@ func ParseCommitRange(commitSpec string) (string, string, bool) {
 // isAncestor checks if possibleAncestor is an ancestor of possibleDescendant.
 // Returns true if possibleAncestor is older than (or equal to) possibleDescendant.
 func isAncestor(repoPath, possibleAncestor, possibleDescendant string) (bool, error) {
+	if err := validateGitRef(possibleAncestor); err != nil {
+		return false, err
+	}
+	if err := validateGitRef(possibleDescendant); err != nil {
+		return false, err
+	}
+
 	cmd := exec.Command("git", "merge-base", "--is-ancestor", possibleAncestor, possibleDescendant)
 	cmd.Dir = repoPath
 	err := cmd.Run()

@@ -164,6 +164,13 @@ func getCommitFiles(repoPath, commitID string) ([]string, error) {
 // GetFileContentFromCommit reads the content of a file at a specific commit
 // using 'git show commit:path'. The filePath should be relative to the repository root.
 func GetFileContentFromCommit(repoPath, commitID, filePath string) ([]byte, error) {
+	if err := validateGitRef(commitID); err != nil {
+		return nil, err
+	}
+	if err := validateGitRelPath(filePath); err != nil {
+		return nil, err
+	}
+
 	// Format: commit:path
 	ref := fmt.Sprintf("%s:%s", commitID, filePath)
 
