@@ -1,12 +1,17 @@
 package depgraph
 
-import "sort"
+import (
+	"sort"
+
+	"github.com/LegacyCodeHQ/sanity/depgraph/langsupport"
+)
 
 // LanguageSupport describes one supported programming language and
 // the file extensions that map to it.
 type LanguageSupport struct {
 	Name       string
 	Extensions []string
+	Maturity   langsupport.MaturityLevel
 }
 
 var supportedLanguageExtensions = buildSupportedLanguageExtensions()
@@ -28,6 +33,7 @@ func SupportedLanguages() []LanguageSupport {
 		languages[i] = LanguageSupport{
 			Name:       language.Module.Name(),
 			Extensions: append([]string(nil), language.Module.Extensions()...),
+			Maturity:   language.Module.Maturity(),
 		}
 	}
 	return languages

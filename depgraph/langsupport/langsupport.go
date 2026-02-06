@@ -24,10 +24,21 @@ type Context struct {
 	GoFiles       []string
 }
 
+// MaturityLevel describes how complete a language's analysis support is.
+type MaturityLevel int
+
+const (
+	MaturityUnknown MaturityLevel = iota
+	MaturityExperimental
+	MaturityBeta
+	MaturityStable
+)
+
 // Module describes pluggable language support.
 type Module interface {
 	Name() string
 	Extensions() []string
+	Maturity() MaturityLevel
 	NewResolver(ctx *Context, contentReader vcs.ContentReader) Resolver
 	IsTestFile(filePath string, contentReader vcs.ContentReader) bool
 }

@@ -15,6 +15,10 @@ func (Module) Extensions() []string {
 	return []string{".kt", ".kts"}
 }
 
+func (Module) Maturity() langsupport.MaturityLevel {
+	return langsupport.MaturityExperimental
+}
+
 func (Module) NewResolver(ctx *langsupport.Context, contentReader vcs.ContentReader) langsupport.Resolver {
 	packageIndex, packageTypes, filePackages := BuildKotlinIndices(ctx.KotlinFiles, contentReader)
 	return resolver{
