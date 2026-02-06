@@ -21,6 +21,7 @@ type graphOptions struct {
 	commitID        string
 	generateURL     bool
 	copyToClipboard bool
+	allowOutside    bool
 	includes        []string
 	betweenFiles    []string
 	targetFile      string
@@ -68,6 +69,8 @@ Examples:
 		fmt.Sprintf("Output format (%s)", formatters.SupportedFormats()))
 	// Add repo flag
 	cmd.Flags().StringVarP(&opts.repoPath, "repo", "r", "", "Git repository path (default: current directory)")
+	// Add allow outside repo flag
+	cmd.Flags().BoolVar(&opts.allowOutside, "allow-outside-repo", false, "Allow input paths outside the repo root")
 	// Add commit flag
 	cmd.Flags().StringVarP(&opts.commitID, "commit", "c", "", "Git commit or range to analyze (e.g., f0459ec, HEAD~3, f0459ec...be3d11a)")
 	// Add URL flag
@@ -92,7 +95,7 @@ func runGraph(cmd *cobra.Command, opts *graphOptions) error {
 	}
 
 	ensureRepoPath(opts)
-	pathResolver, err := NewPathResolver(opts.repoPath)
+	pathResolver, err := NewPathResolver(opts.repoPath, opts.allowOutside)
 	if err != nil {
 		return fmt.Errorf("failed to create path resolver: %w", err)
 	}

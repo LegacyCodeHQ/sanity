@@ -3,6 +3,7 @@ package graph
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 )
 
 // RawPath is a user-provided file path from CLI flags.
@@ -17,10 +18,11 @@ func (p AbsolutePath) String() string {
 
 // PathResolver resolves raw user paths relative to a configured base directory.
 type PathResolver struct {
-	baseDir AbsolutePath
+	baseDir      AbsolutePath
+	allowOutside bool
 }
 
-func NewPathResolver(baseDir string) (PathResolver, error) {
+func NewPathResolver(baseDir string, allowOutside bool) (PathResolver, error) {
 	if baseDir == "" {
 		baseDir = "."
 	}
@@ -30,7 +32,11 @@ func NewPathResolver(baseDir string) (PathResolver, error) {
 		return PathResolver{}, fmt.Errorf("failed to resolve base path: %w", err)
 	}
 
-	return PathResolver{baseDir: AbsolutePath(filepath.Clean(absBaseDir))}, nil
+	absBaseDir = resolveSymlinks(absBaseDir)
+	return PathResolver{
+		baseDir:      AbsolutePath(filepath.Clean(absBaseDir)),
+		allowOutside: allowOutside,
+	}, nil
 }
 
 func (r PathResolver) Resolve(path RawPath) (AbsolutePath, error) {
@@ -40,8 +46,56 @@ func (r PathResolver) Resolve(path RawPath) (AbsolutePath, error) {
 	}
 
 	if filepath.IsAbs(pathStr) {
-		return AbsolutePath(filepath.Clean(pathStr)), nil
+		absPath := filepath.Clean(pathStr)
+		if !r.allowOutside {
+			within, err := isWithinBase(r.baseDir.String(), absPath)
+			if err != nil {
+				return "", err
+			}
+			if !within {
+				return "", fmt.Errorf("path must be within repository: %q", pathStr)
+			}
+		}
+		return AbsolutePath(absPath), nil
 	}
 
-	return AbsolutePath(filepath.Clean(filepath.Join(r.baseDir.String(), pathStr))), nil
+	absPath := filepath.Clean(filepath.Join(r.baseDir.String(), pathStr))
+	if !r.allowOutside {
+		within, err := isWithinBase(r.baseDir.String(), absPath)
+		if err != nil {
+			return "", err
+		}
+		if !within {
+			return "", fmt.Errorf("path must be within repository: %q", pathStr)
+		}
+	}
+	return AbsolutePath(absPath), nil
+}
+
+func isWithinBase(baseDir, targetPath string) (bool, error) {
+	baseDir = resolveSymlinks(filepath.Clean(baseDir))
+	targetPath = resolveSymlinks(filepath.Clean(targetPath))
+
+	rel, err := filepath.Rel(baseDir, targetPath)
+	if err != nil {
+		return false, fmt.Errorf("failed to evaluate path %q: %w", targetPath, err)
+	}
+	if rel == "." {
+		return true, nil
+	}
+	if rel == ".." {
+		return false, nil
+	}
+	if strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false, nil
+	}
+	return !filepath.IsAbs(rel), nil
+}
+
+func resolveSymlinks(path string) string {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return path
+	}
+	return resolved
 }

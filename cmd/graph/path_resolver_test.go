@@ -8,7 +8,7 @@ import (
 
 func TestPathResolverResolve_WithRepoBase_ResolvesRelativePathFromRepo(t *testing.T) {
 	repoDir := t.TempDir()
-	resolver, err := NewPathResolver(repoDir)
+	resolver, err := NewPathResolver(repoDir, false)
 	if err != nil {
 		t.Fatalf("NewPathResolver() error = %v", err)
 	}
@@ -39,7 +39,7 @@ func TestPathResolverResolve_WithoutRepoBase_UsesCurrentWorkingDirectory(t *test
 		t.Fatalf("os.Chdir() error = %v", err)
 	}
 
-	resolver, err := NewPathResolver("")
+	resolver, err := NewPathResolver("", false)
 	if err != nil {
 		t.Fatalf("NewPathResolver() error = %v", err)
 	}
@@ -59,7 +59,7 @@ func TestPathResolverResolve_WithoutRepoBase_UsesCurrentWorkingDirectory(t *test
 }
 
 func TestPathResolverResolve_AbsolutePath_Unchanged(t *testing.T) {
-	resolver, err := NewPathResolver(t.TempDir())
+	resolver, err := NewPathResolver(t.TempDir(), true)
 	if err != nil {
 		t.Fatalf("NewPathResolver() error = %v", err)
 	}
@@ -72,5 +72,19 @@ func TestPathResolverResolve_AbsolutePath_Unchanged(t *testing.T) {
 
 	if resolved.String() != absolutePath {
 		t.Fatalf("expected absolute path to be unchanged: %q, got %q", absolutePath, resolved.String())
+	}
+}
+
+func TestPathResolverResolve_AbsolutePathOutsideRepo_Disallowed(t *testing.T) {
+	repoDir := t.TempDir()
+	resolver, err := NewPathResolver(repoDir, false)
+	if err != nil {
+		t.Fatalf("NewPathResolver() error = %v", err)
+	}
+
+	outsidePath := filepath.Join(t.TempDir(), "main.go")
+	_, err = resolver.Resolve(RawPath(outsidePath))
+	if err == nil {
+		t.Fatalf("expected error for path outside repo, got nil")
 	}
 }
