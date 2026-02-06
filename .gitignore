@@ -17,3 +17,9 @@ dist/
 
 # Beads
 .beads/bd.*
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
