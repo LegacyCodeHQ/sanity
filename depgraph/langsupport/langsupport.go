@@ -29,8 +29,9 @@ type MaturityLevel int
 
 const (
 	MaturityUnknown MaturityLevel = iota
-	MaturityExperimental
-	MaturityBeta
+	MaturityVibed
+	MaturityBasicTesting
+	MaturityActiveTesting
 	MaturityStable
 )
 
