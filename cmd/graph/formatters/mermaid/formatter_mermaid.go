@@ -57,7 +57,7 @@ func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.Rende
 		filePaths = append(filePaths, source)
 	}
 	sort.Strings(filePaths)
-	nodeNames := buildNodeNames(filePaths)
+	nodeNames := formatters.BuildNodeNames(filePaths)
 
 	// Create a mapping from node keys to valid Mermaid node IDs.
 	// Mermaid node IDs can't have dots or special characters.
@@ -239,59 +239,6 @@ func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.Rende
 	}
 
 	return strings.TrimSuffix(sb.String(), "\n"), nil
-}
-
-func buildNodeNames(paths []string) map[string]string {
-	names := make(map[string]string, len(paths))
-	groupedByBase := make(map[string][]string, len(paths))
-	for _, path := range paths {
-		groupedByBase[filepath.Base(path)] = append(groupedByBase[filepath.Base(path)], path)
-	}
-
-	for base, groupedPaths := range groupedByBase {
-		if len(groupedPaths) == 1 {
-			names[groupedPaths[0]] = base
-			continue
-		}
-
-		for depth := 2; ; depth++ {
-			suffixCounts := make(map[string]int, len(groupedPaths))
-			for _, path := range groupedPaths {
-				suffixCounts[pathSuffix(path, depth)]++
-			}
-
-			allDistinct := true
-			for _, path := range groupedPaths {
-				suffix := pathSuffix(path, depth)
-				if suffixCounts[suffix] > 1 {
-					allDistinct = false
-					break
-				}
-			}
-			if !allDistinct {
-				continue
-			}
-
-			for _, path := range groupedPaths {
-				names[path] = pathSuffix(path, depth)
-			}
-			break
-		}
-	}
-
-	return names
-}
-
-func pathSuffix(path string, depth int) string {
-	normalized := filepath.ToSlash(filepath.Clean(path))
-	parts := strings.Split(strings.TrimPrefix(normalized, "/"), "/")
-	if len(parts) == 0 {
-		return normalized
-	}
-	if depth > len(parts) {
-		depth = len(parts)
-	}
-	return strings.Join(parts[len(parts)-depth:], "/")
 }
 
 // GenerateURL creates a mermaid.live URL with the diagram embedded.
