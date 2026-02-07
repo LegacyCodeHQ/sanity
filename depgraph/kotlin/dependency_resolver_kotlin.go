@@ -33,11 +33,18 @@ func ResolveKotlinProjectImports(
 	}
 
 	imports = ClassifyWithProjectPackages(imports, projectPackages)
+	typeReferences := ExtractTypeIdentifiers(content)
+	referencedTypes := make(map[string]bool, len(typeReferences))
+	for _, ref := range typeReferences {
+		if ref != "" {
+			referencedTypes[ref] = true
+		}
+	}
 
 	var projectImports []string
 	for _, imp := range imports {
 		if internalImp, ok := imp.(InternalImport); ok {
-			resolvedFiles := resolveKotlinImportPath(absPath, internalImp, kotlinPackageIndex, suppliedFiles)
+			resolvedFiles := resolveKotlinImportPath(absPath, internalImp, kotlinPackageTypes, referencedTypes, suppliedFiles)
 			projectImports = append(projectImports, resolvedFiles...)
 		}
 	}
@@ -119,45 +126,61 @@ func buildKotlinPackageIndex(filePaths []string, contentReader vcs.ContentReader
 	return packageToFiles, packageToTypes
 }
 
-// resolveKotlinImportPath resolves a Kotlin import to absolute file paths
+// resolveKotlinImportPath resolves Kotlin imports strictly by referenced symbols.
 func resolveKotlinImportPath(
 	sourceFile string,
 	imp KotlinImport,
-	packageIndex map[string][]string,
+	packageTypeIndex map[string]map[string][]string,
+	referencedTypes map[string]bool,
 	suppliedFiles map[string]bool,
 ) []string {
+	if len(referencedTypes) == 0 {
+		return nil
+	}
+
 	var resolvedFiles []string
+	seen := make(map[string]bool)
+
+	appendResolvedFiles := func(files []string) {
+		for _, file := range files {
+			if file == sourceFile || !suppliedFiles[file] || seen[file] {
+				continue
+			}
+			seen[file] = true
+			resolvedFiles = append(resolvedFiles, file)
+		}
+	}
+
+	resolveReferencedTypes := func(typeMap map[string][]string) {
+		if len(typeMap) == 0 {
+			return
+		}
+		for ref := range referencedTypes {
+			files := typeMap[ref]
+			if len(files) != 1 {
+				continue
+			}
+			appendResolvedFiles(files)
+		}
+	}
 
 	if imp.IsWildcard() {
-		// Wildcard: find all files in the package
-		pkg := imp.Package()
-		if files, ok := packageIndex[pkg]; ok {
-			for _, file := range files {
-				if file != sourceFile && suppliedFiles[file] {
-					resolvedFiles = append(resolvedFiles, file)
-				}
-			}
+		// Wildcard import: only add files for actually referenced type symbols.
+		if typeMap, ok := packageTypeIndex[imp.Package()]; ok {
+			resolveReferencedTypes(typeMap)
 		}
 	} else {
-		// Specific import: find files in the package
 		pkg := imp.Package()
-		if files, ok := packageIndex[pkg]; ok {
-			for _, file := range files {
-				if file != sourceFile && suppliedFiles[file] {
-					resolvedFiles = append(resolvedFiles, file)
-				}
-			}
+		symbol := extractSimpleName(imp.Path())
+		if !referencedTypes[symbol] {
+			return resolvedFiles
 		}
-
-		// Also check if the full import path is a package
-		fullPath := imp.Path()
-		if fullPath != pkg {
-			if files, ok := packageIndex[fullPath]; ok {
-				for _, file := range files {
-					if file != sourceFile && suppliedFiles[file] {
-						resolvedFiles = append(resolvedFiles, file)
-					}
+		if typeMap, ok := packageTypeIndex[pkg]; ok {
+			if files, ok := typeMap[symbol]; ok {
+				if len(files) != 1 {
+					return resolvedFiles
 				}
+				appendResolvedFiles(files)
 			}
 		}
 	}
@@ -226,6 +249,9 @@ func resolveKotlinSamePackageDependencies(
 		}
 		files, ok := typeIndex[ref]
 		if !ok {
+			continue
+		}
+		if len(files) != 1 {
 			continue
 		}
 		for _, depFile := range files {

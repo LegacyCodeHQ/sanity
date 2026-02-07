@@ -603,7 +603,12 @@ import com.example.app.models.User
 import com.example.app.services.ApiService
 
 class MainActivity {
-    fun main() {}
+    fun main() {
+        val user: User? = null
+        val service: ApiService? = null
+        println(user)
+        println(service)
+    }
 }`
 	mainPath := filepath.Join(tmpDir, "MainActivity.kt")
 	err := os.WriteFile(mainPath, []byte(mainContent), 0644)
@@ -614,11 +619,11 @@ class MainActivity {
 	err = os.Mkdir(modelsDir, 0755)
 	require.NoError(t, err)
 
-	userContent := `package com.example.app.models
+userContent := `package com.example.app.models
 
 import com.example.app.utils.Validator
 
-data class User(val name: String)`
+data class User(val name: String, val validator: Validator? = null)`
 	userPath := filepath.Join(modelsDir, "User.kt")
 	err = os.WriteFile(userPath, []byte(userContent), 0644)
 	require.NoError(t, err)
@@ -696,7 +701,14 @@ func TestBuildDependencyGraph_KotlinWildcardImports(t *testing.T) {
 import com.example.app.models.*
 
 class MainActivity {
-    fun main() {}
+    fun main() {
+        val user: User? = null
+        val product: Product? = null
+        val order: Order? = null
+        println(user)
+        println(product)
+        println(order)
+    }
 }`
 	mainPath := filepath.Join(tmpDir, "MainActivity.kt")
 	err := os.WriteFile(mainPath, []byte(mainContent), 0644)

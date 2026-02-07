@@ -465,6 +465,30 @@ func ExtractTypeIdentifiers(sourceCode []byte) []string {
 		}
 	}
 
+	symbolQuery, err := sitter.NewQuery([]byte("(navigation_expression (simple_identifier) @symbol.name)"), lang)
+	if err != nil {
+		return identifiers
+	}
+	defer symbolQuery.Close()
+
+	symbolCursor := sitter.NewQueryCursor()
+	defer symbolCursor.Close()
+	symbolCursor.Exec(symbolQuery, tree.RootNode())
+
+	for {
+		match, ok := symbolCursor.NextMatch()
+		if !ok {
+			break
+		}
+		for _, capture := range match.Captures {
+			name := strings.TrimSpace(capture.Node.Content(sourceCode))
+			if isUpperCamelIdentifier(name) && !seen[name] {
+				seen[name] = true
+				identifiers = append(identifiers, name)
+			}
+		}
+	}
+
 	return identifiers
 }
 

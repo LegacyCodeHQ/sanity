@@ -388,3 +388,20 @@ fun demo() {
 	assert.Contains(t, identifiers, "KLoggingEvent")
 	assert.NotContains(t, identifiers, "println")
 }
+
+func TestExtractTypeIdentifiers_NavigationExpression(t *testing.T) {
+	source := []byte(`
+package com.example
+
+fun demo() {
+  val level = Level.INFO
+  DarwinFormatter.getFormattedMessage()
+  println(level)
+}
+`)
+
+	identifiers := ExtractTypeIdentifiers(source)
+	assert.Contains(t, identifiers, "Level")
+	assert.Contains(t, identifiers, "DarwinFormatter")
+	assert.NotContains(t, identifiers, "println")
+}
