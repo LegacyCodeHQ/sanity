@@ -64,3 +64,25 @@ func TestResolveCppIncludePath(t *testing.T) {
 	resolved = ResolveCppIncludePath(sourceFile, "tools", suppliedFiles)
 	assert.Contains(t, resolved, "/project/src/tools.hh")
 }
+
+func TestResolveCppIncludePath_ResolvesIncludeRootFromAncestor(t *testing.T) {
+	suppliedFiles := map[string]bool{
+		"/project/include/fmt/format.h": true,
+	}
+
+	sourceFile := "/project/test/format-test.cc"
+	resolved := ResolveCppIncludePath(sourceFile, "fmt/format.h", suppliedFiles)
+
+	assert.Equal(t, []string{"/project/include/fmt/format.h"}, resolved)
+}
+
+func TestResolveCppIncludePath_DeduplicatesResolvedPaths(t *testing.T) {
+	suppliedFiles := map[string]bool{
+		"/project/include/fmt/format.h": true,
+	}
+
+	sourceFile := "/project/include/fmt/test-driver.cc"
+	resolved := ResolveCppIncludePath(sourceFile, "format.h", suppliedFiles)
+
+	assert.Equal(t, []string{"/project/include/fmt/format.h"}, resolved)
+}

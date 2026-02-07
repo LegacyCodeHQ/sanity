@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
@@ -106,25 +107,60 @@ func cleanSystemInclude(raw string) string {
 // ResolveCppIncludePath resolves a C++ include path to possible file paths.
 func ResolveCppIncludePath(sourceFile, includePath string, suppliedFiles map[string]bool) []string {
 	sourceDir := filepath.Dir(sourceFile)
-	basePath := filepath.Join(sourceDir, includePath)
-	basePath = filepath.Clean(basePath)
+	baseCandidates := includeBasePathCandidates(sourceDir, includePath)
+	seen := make(map[string]bool)
 
 	var resolvedPaths []string
+	appendResolved := func(path string) {
+		if !seen[path] && suppliedFiles[path] {
+			seen[path] = true
+			resolvedPaths = append(resolvedPaths, path)
+		}
+	}
 
 	if filepath.Ext(includePath) != "" {
-		if suppliedFiles[basePath] {
-			resolvedPaths = append(resolvedPaths, basePath)
+		for _, base := range baseCandidates {
+			appendResolved(base)
 		}
+		sort.Strings(resolvedPaths)
 		return resolvedPaths
 	}
 
 	extensions := []string{".h", ".hpp", ".hh", ".hxx"}
-	for _, ext := range extensions {
-		candidate := basePath + ext
-		if suppliedFiles[candidate] {
-			resolvedPaths = append(resolvedPaths, candidate)
+	for _, base := range baseCandidates {
+		for _, ext := range extensions {
+			appendResolved(base + ext)
 		}
 	}
 
+	sort.Strings(resolvedPaths)
 	return resolvedPaths
+}
+
+func includeBasePathCandidates(sourceDir, includePath string) []string {
+	candidates := make(map[string]bool)
+	add := func(p string) {
+		candidates[filepath.Clean(p)] = true
+	}
+
+	// Always try source-relative first.
+	add(filepath.Join(sourceDir, includePath))
+
+	// Also try ancestor roots and common include roots.
+	for dir := sourceDir; ; dir = filepath.Dir(dir) {
+		add(filepath.Join(dir, includePath))
+		add(filepath.Join(dir, "include", includePath))
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+	}
+
+	out := make([]string, 0, len(candidates))
+	for p := range candidates {
+		out = append(out, p)
+	}
+	sort.Strings(out)
+	return out
 }
