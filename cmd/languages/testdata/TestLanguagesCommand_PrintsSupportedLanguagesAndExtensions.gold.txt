@@ -8,6 +8,7 @@
 ◐ Java        .java
 ◐ Kotlin      .kt, .kts
 ◐ Python      .py
+○ Ruby        .rb
 ◐ Rust        .rs
 ◐ Swift       .swift
 ◐ TypeScript  .ts, .tsx

@@ -13,6 +13,7 @@ func TestSupportedLanguages(t *testing.T) {
 	foundCSharp := false
 	foundJavaScript := false
 	foundPython := false
+	foundRuby := false
 	foundRust := false
 	foundSwift := false
 	foundTypeScript := false
@@ -42,6 +43,11 @@ func TestSupportedLanguages(t *testing.T) {
 			foundPython = true
 			if len(language.Extensions) != 1 {
 				t.Fatalf("Python extension count = %d, want 1", len(language.Extensions))
+			}
+		case "Ruby":
+			foundRuby = true
+			if len(language.Extensions) != 1 {
+				t.Fatalf("Ruby extension count = %d, want 1", len(language.Extensions))
 			}
 		case "Rust":
 			foundRust = true
@@ -76,6 +82,9 @@ func TestSupportedLanguages(t *testing.T) {
 	if !foundPython {
 		t.Fatalf("SupportedLanguages() missing Python")
 	}
+	if !foundRuby {
+		t.Fatalf("SupportedLanguages() missing Ruby")
+	}
 	if !foundRust {
 		t.Fatalf("SupportedLanguages() missing Rust")
 	}
@@ -108,6 +117,9 @@ func TestIsSupportedLanguageExtension(t *testing.T) {
 	}
 	if !IsSupportedLanguageExtension(".py") {
 		t.Fatalf("IsSupportedLanguageExtension(.py) = false, want true")
+	}
+	if !IsSupportedLanguageExtension(".rb") {
+		t.Fatalf("IsSupportedLanguageExtension(.rb) = false, want true")
 	}
 	if !IsSupportedLanguageExtension(".rs") {
 		t.Fatalf("IsSupportedLanguageExtension(.rs) = false, want true")

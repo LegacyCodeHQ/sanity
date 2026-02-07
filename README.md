@@ -54,6 +54,7 @@ Sanity uses a file-based dependency graph to visualize the impact of AI-generate
 - Java
 - Kotlin
 - Python
+- Ruby
 - Rust
 - Swift
 - TypeScript
