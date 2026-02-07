@@ -1,6 +1,6 @@
 
 ◐ C           .c, .h
-○ C++         .cc, .cpp, .cxx, .hpp, .hh, .hxx
+◐ C++         .cc, .cpp, .cxx, .hpp, .hh, .hxx
 ○ C#          .cs
 ◐ Dart        .dart
 ● Go          .go
