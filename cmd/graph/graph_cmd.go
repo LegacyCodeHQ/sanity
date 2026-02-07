@@ -40,21 +40,8 @@ func NewCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "graph",
-		Short: "Generate a dependency graph for project files.",
-		Long: `Generate a dependency graph for project files.
-
-By default, graphs uncommitted changes. Use -c for commits or -i for specific files.
-
-Examples:
-  sanity graph                                # uncommitted changes
-  sanity graph -c HEAD~3                      # single commit
-  sanity graph -c f0459ec...be3d11a           # commit range
-  sanity graph -i ./main.go,./lib             # specific files/directories
-  sanity graph -c HEAD -i ./lib               # files in directory at commit
-  sanity graph -w ./main.go,./utils.go        # paths between files
-  sanity graph -p ./main.go                   # dependencies of a specific file (level 1)
-  sanity graph -p ./main.go -l 2              # dependencies up to 2 levels deep
-  sanity graph -u                             # generate visualization URL`,
+		Short: "Generate a file-based dependency graph.",
+		Long:  `Generate a file-based dependency graph.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGraph(cmd, opts)
 		},
