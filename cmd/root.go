@@ -40,6 +40,7 @@ func init() {
 	rootCmd.AddCommand(graph.Cmd)
 	rootCmd.AddCommand(languages.Cmd)
 	rootCmd.AddCommand(setupcmd.Cmd)
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
 
 	// Global flags inherited by all subcommands.
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose/debug output")
