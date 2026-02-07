@@ -28,8 +28,7 @@ type Context struct {
 type MaturityLevel int
 
 const (
-	MaturityUnknown MaturityLevel = iota
-	MaturityUntested
+	MaturityUntested MaturityLevel = iota
 	MaturityBasicTests
 	MaturityActivelyTested
 	MaturityStable
