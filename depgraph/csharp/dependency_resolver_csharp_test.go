@@ -105,3 +105,50 @@ public class Service {}
 	require.NoError(t, err)
 	assert.Empty(t, imports)
 }
+
+func TestResolveCSharpProjectImports_DoesNotLinkMethodNameToConcreteType(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	monsterPath := filepath.Join(tmpDir, "MonsterGrain.cs")
+	require.NoError(t, os.WriteFile(monsterPath, []byte(`using AdventureGrainInterfaces;
+
+namespace AdventureGrains;
+
+public class MonsterGrain
+{
+    private IRoomGrain? _roomGrain;
+
+    Task<IRoomGrain> RoomGrain() => Task.FromResult(_roomGrain!);
+}
+`), 0o644))
+
+	roomPath := filepath.Join(tmpDir, "RoomGrain.cs")
+	require.NoError(t, os.WriteFile(roomPath, []byte(`namespace AdventureGrains;
+public class RoomGrain {}
+`), 0o644))
+
+	iRoomPath := filepath.Join(tmpDir, "IRoomGrain.cs")
+	require.NoError(t, os.WriteFile(iRoomPath, []byte(`namespace AdventureGrainInterfaces;
+public interface IRoomGrain {}
+`), 0o644))
+
+	supplied := map[string]bool{
+		monsterPath: true,
+		roomPath:    true,
+		iRoomPath:   true,
+	}
+	reader := vcs.FilesystemContentReader()
+	namespaceToFiles, namespaceToTypes, fileToNamespace := BuildCSharpIndices(supplied, reader)
+
+	imports, err := ResolveCSharpProjectImports(
+		monsterPath,
+		monsterPath,
+		namespaceToFiles,
+		namespaceToTypes,
+		fileToNamespace,
+		supplied,
+		reader)
+	require.NoError(t, err)
+	assert.Contains(t, imports, iRoomPath)
+	assert.NotContains(t, imports, roomPath)
+}

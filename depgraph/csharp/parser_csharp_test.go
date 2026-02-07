@@ -79,3 +79,22 @@ public delegate void MessageHandler(string message);
 	assert.ElementsMatch(t, []string{"Program", "IService", "MessageHandler"}, names)
 	assert.NotContains(t, names, "Nested")
 }
+
+func TestExtractCSharpTypeIdentifiers_DoesNotTreatMethodNamesAsTypes(t *testing.T) {
+	source := `
+namespace AdventureGrains;
+
+public class MonsterGrain
+{
+    private IRoomGrain? _roomGrain;
+
+    Task<IRoomGrain> RoomGrain() => Task.FromResult(_roomGrain!);
+}
+
+public class RoomGrain {}
+`
+	identifiers := ExtractCSharpTypeIdentifiers(source)
+
+	assert.Contains(t, identifiers, "IRoomGrain")
+	assert.NotContains(t, identifiers, "RoomGrain")
+}

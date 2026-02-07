@@ -277,6 +277,16 @@ func extractDeclarationName(node *sitter.Node, sourceCode []byte) string {
 
 // ExtractCSharpTypeIdentifiers extracts likely type identifiers from code references.
 func ExtractCSharpTypeIdentifiers(source string) []string {
+	sourceCode := []byte(source)
+	tree, err := parseCSharpTree(sourceCode)
+	if err == nil {
+		defer tree.Close()
+		identifiers := extractTypeIdentifiersFromTree(tree.RootNode(), sourceCode)
+		if len(identifiers) > 0 {
+			return identifiers
+		}
+	}
+
 	normalized := stripCSharpStringsAndComments(source)
 	matches := csharpTypeIdentifierPattern.FindAllString(normalized, -1)
 	if len(matches) == 0 {
@@ -293,6 +303,124 @@ func ExtractCSharpTypeIdentifiers(source string) []string {
 		identifiers = append(identifiers, match)
 	}
 	return identifiers
+}
+
+func extractTypeIdentifiersFromTree(root *sitter.Node, sourceCode []byte) []string {
+	if root == nil {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	var out []string
+	add := func(name string) {
+		if name == "" {
+			return
+		}
+		if isCSharpBuiltinType(name) {
+			return
+		}
+		if seen[name] {
+			return
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+
+	var collectTypeNames func(*sitter.Node)
+	collectTypeNames = func(node *sitter.Node) {
+		if node == nil {
+			return
+		}
+
+		switch node.Type() {
+		case "identifier":
+			add(strings.TrimSpace(node.Content(sourceCode)))
+			return
+		case "qualified_name", "alias_qualified_name":
+			last := ""
+			for i := 0; i < int(node.NamedChildCount()); i++ {
+				child := node.NamedChild(i)
+				if child == nil || child.Type() != "identifier" {
+					continue
+				}
+				last = strings.TrimSpace(child.Content(sourceCode))
+			}
+			add(last)
+			return
+		case "generic_name":
+			for i := 0; i < int(node.NamedChildCount()); i++ {
+				child := node.NamedChild(i)
+				if child == nil {
+					continue
+				}
+				// Do not add the generic container type (e.g. Task, List) as
+				// dependency signals; only collect contained type arguments.
+				if child.Type() == "type_argument_list" {
+					collectTypeNames(child)
+				}
+			}
+			return
+		case "array_type", "nullable_type", "pointer_type", "function_pointer_type", "tuple_type", "type_argument_list":
+			for i := 0; i < int(node.NamedChildCount()); i++ {
+				collectTypeNames(node.NamedChild(i))
+			}
+			return
+		}
+	}
+
+	collectIfTypeContext := func(node *sitter.Node) {
+		if node == nil {
+			return
+		}
+		collectTypeNames(node)
+	}
+
+	var walk func(*sitter.Node)
+	walk = func(node *sitter.Node) {
+		if node == nil {
+			return
+		}
+
+		switch node.Type() {
+		case "base_list":
+			for i := 0; i < int(node.NamedChildCount()); i++ {
+				collectIfTypeContext(node.NamedChild(i))
+			}
+		case "variable_declaration":
+			collectIfTypeContext(node.NamedChild(0))
+		case "parameter":
+			collectIfTypeContext(node.NamedChild(0))
+		case "method_declaration":
+			collectIfTypeContext(node.NamedChild(0))
+		case "property_declaration":
+			collectIfTypeContext(node.NamedChild(0))
+		case "indexer_declaration":
+			collectIfTypeContext(node.NamedChild(0))
+		case "operator_declaration", "conversion_operator_declaration":
+			collectIfTypeContext(node.NamedChild(0))
+		case "object_creation_expression":
+			collectIfTypeContext(node.NamedChild(0))
+		case "cast_expression", "as_expression", "is_expression", "declaration_pattern", "recursive_pattern", "type_of_expression", "default_expression", "sizeof_expression":
+			collectIfTypeContext(node.NamedChild(0))
+		}
+
+		for i := 0; i < int(node.NamedChildCount()); i++ {
+			walk(node.NamedChild(i))
+		}
+	}
+
+	walk(root)
+	return out
+}
+
+func isCSharpBuiltinType(name string) bool {
+	switch name {
+	case "bool", "byte", "sbyte", "char", "decimal", "double", "float", "int", "uint", "nint", "nuint",
+		"long", "ulong", "short", "ushort", "object", "string", "dynamic", "void":
+		return true
+	default:
+		return false
+	}
 }
 
 func stripCSharpComments(source string) string {
