@@ -315,6 +315,16 @@ func ResolveTypeScriptImportPath(sourceFile, importPath string, suppliedFiles ma
 	// TypeScript extension resolution order
 	extensions := []string{".ts", ".tsx", ".js", ".jsx"}
 
+	// In TS/TSX source, explicit runtime .js/.jsx specifiers often point to .ts/.tsx files.
+	// Try source-file variants first to avoid missing project edges in mixed module setups.
+	if sourceCandidates := sourceCandidatesForJSImport(basePath); len(sourceCandidates) > 0 {
+		for _, candidate := range sourceCandidates {
+			if suppliedFiles[candidate] {
+				resolvedPaths = append(resolvedPaths, candidate)
+			}
+		}
+	}
+
 	// Try direct path with extensions
 	for _, ext := range extensions {
 		candidate := basePath + ext
@@ -352,4 +362,17 @@ func ResolveTypeScriptImportPath(sourceFile, importPath string, suppliedFiles ma
 func hasTypeScriptExtension(path string) bool {
 	ext := filepath.Ext(path)
 	return ext == ".ts" || ext == ".tsx" || ext == ".js" || ext == ".jsx"
+}
+
+func sourceCandidatesForJSImport(basePath string) []string {
+	ext := filepath.Ext(basePath)
+	stem := strings.TrimSuffix(basePath, ext)
+	switch ext {
+	case ".js":
+		return []string{stem + ".ts", stem + ".tsx"}
+	case ".jsx":
+		return []string{stem + ".tsx", stem + ".ts"}
+	default:
+		return nil
+	}
 }

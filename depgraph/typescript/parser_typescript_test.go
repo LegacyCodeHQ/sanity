@@ -356,6 +356,28 @@ func TestResolveTypeScriptImportPath_NotFound(t *testing.T) {
 	assert.Empty(t, resolved)
 }
 
+func TestResolveTypeScriptImportPath_JSImportResolvesToTypeScriptSource(t *testing.T) {
+	suppliedFiles := map[string]bool{
+		"/project/src/utils/cache.ts": true,
+	}
+
+	sourceFile := "/project/src/tools/finance/api.ts"
+
+	resolved := ResolveTypeScriptImportPath(sourceFile, "../../utils/cache.js", suppliedFiles)
+	assert.Contains(t, resolved, "/project/src/utils/cache.ts")
+}
+
+func TestResolveTypeScriptImportPath_JSXImportResolvesToTSXSource(t *testing.T) {
+	suppliedFiles := map[string]bool{
+		"/project/src/components/Button.tsx": true,
+	}
+
+	sourceFile := "/project/src/pages/Home.tsx"
+
+	resolved := ResolveTypeScriptImportPath(sourceFile, "../components/Button.jsx", suppliedFiles)
+	assert.Contains(t, resolved, "/project/src/components/Button.tsx")
+}
+
 func TestClassifyTypeScriptImport_NodeBuiltins(t *testing.T) {
 	testCases := []struct {
 		path     string
