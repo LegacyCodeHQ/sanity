@@ -1,5 +1,5 @@
 
-○ C           .c, .h
+◐ C           .c, .h
 ○ C++         .cc, .cpp, .cxx, .hpp, .hh, .hxx
 ○ C#          .cs
 ◐ Dart        .dart
