@@ -1,9 +1,14 @@
 package csharp
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
+
+	sitter "github.com/smacker/go-tree-sitter"
+	tscsharp "github.com/smacker/go-tree-sitter/csharp"
 )
 
 // CSharpImport represents a using directive.
@@ -23,60 +28,357 @@ func CSharpImports(filePath string) ([]CSharpImport, error) {
 
 // ParseCSharpImports parses C# source code and extracts using directives.
 func ParseCSharpImports(source string) []CSharpImport {
-	lines := strings.Split(source, "\n")
-	inBlockComment := false
+	sourceCode := []byte(source)
+	tree, err := parseCSharpTree(sourceCode)
+	if err != nil {
+		return parseCSharpImportsFallback(source)
+	}
+	defer tree.Close()
 
+	return extractUsingDirectives(tree.RootNode(), sourceCode)
+}
+
+func parseCSharpTree(sourceCode []byte) (*sitter.Tree, error) {
+	parser := sitter.NewParser()
+	parser.SetLanguage(tscsharp.GetLanguage())
+	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse C# code: %w", err)
+	}
+	return tree, nil
+}
+
+func extractUsingDirectives(root *sitter.Node, sourceCode []byte) []CSharpImport {
+	var imports []CSharpImport
+	if root == nil {
+		return imports
+	}
+
+	var walk func(*sitter.Node)
+	walk = func(node *sitter.Node) {
+		if node == nil {
+			return
+		}
+		if node.Type() == "using_directive" {
+			path := extractUsingPath(node, sourceCode)
+			if path != "" {
+				imports = append(imports, CSharpImport{Path: path})
+			}
+			return
+		}
+		for i := 0; i < int(node.NamedChildCount()); i++ {
+			walk(node.NamedChild(i))
+		}
+	}
+	walk(root)
+
+	return imports
+}
+
+func extractUsingPath(usingNode *sitter.Node, sourceCode []byte) string {
+	if usingNode == nil {
+		return ""
+	}
+
+	var fallback string
+	for i := 0; i < int(usingNode.NamedChildCount()); i++ {
+		child := usingNode.NamedChild(i)
+		if child == nil {
+			continue
+		}
+
+		switch child.Type() {
+		case "qualified_name", "alias_qualified_name":
+			return strings.TrimSpace(child.Content(sourceCode))
+		case "identifier":
+			text := strings.TrimSpace(child.Content(sourceCode))
+			if text != "" {
+				fallback = text
+			}
+		}
+	}
+	return fallback
+}
+
+func parseCSharpImportsFallback(source string) []CSharpImport {
+	lines := strings.Split(source, "\n")
 	var imports []CSharpImport
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "using ") || !strings.Contains(trimmed, ";") {
+			continue
+		}
+		statement := strings.TrimSpace(strings.TrimSuffix(trimmed, ";"))
+		statement = strings.TrimPrefix(statement, "using ")
+		statement = strings.TrimPrefix(statement, "static ")
+		if eq := strings.Index(statement, "="); eq >= 0 {
+			statement = strings.TrimSpace(statement[eq+1:])
+		}
+		statement = strings.TrimSpace(statement)
+		if statement == "" || strings.HasPrefix(statement, "(") {
+			continue
+		}
+		imports = append(imports, CSharpImport{Path: statement})
+	}
+	return imports
+}
 
+var csharpTypeIdentifierPattern = regexp.MustCompile(`\b[A-Z][A-Za-z0-9_]*\b`)
+
+// ParseCSharpNamespace extracts the file namespace declaration.
+func ParseCSharpNamespace(source string) string {
+	sourceCode := []byte(source)
+	tree, err := parseCSharpTree(sourceCode)
+	if err == nil {
+		defer tree.Close()
+		namespace := extractNamespace(tree.RootNode(), sourceCode)
+		if namespace != "" {
+			return namespace
+		}
+	}
+	withoutComments := stripCSharpComments(source)
+	if matches := regexp.MustCompile(`(?m)^\s*namespace\s+([A-Za-z_][A-Za-z0-9_\.]*)\s*[;{]`).FindStringSubmatch(withoutComments); len(matches) > 1 {
+		return matches[1]
+	}
+	return ""
+}
+
+// ParseTopLevelCSharpTypeNames extracts top-level type names declared in a file.
+func ParseTopLevelCSharpTypeNames(source string) []string {
+	sourceCode := []byte(source)
+	tree, err := parseCSharpTree(sourceCode)
+	if err == nil {
+		defer tree.Close()
+		return extractTopLevelTypeNames(tree.RootNode(), sourceCode)
+	}
+
+	withoutComments := stripCSharpComments(source)
+	seen := make(map[string]bool)
+	var names []string
+
+	typeDeclPattern := regexp.MustCompile(`(?m)^\s*(?:public|private|internal|protected|sealed|static|abstract|partial|readonly|file|unsafe|new|\s)*\b(?:class|interface|struct|enum|record)\s+([A-Za-z_][A-Za-z0-9_]*)`)
+	for _, match := range typeDeclPattern.FindAllStringSubmatch(withoutComments, -1) {
+		if len(match) < 2 {
+			continue
+		}
+		name := match[1]
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+
+	delegateDeclPattern := regexp.MustCompile(`(?m)^\s*(?:public|private|internal|protected|static|unsafe|new|\s)*\bdelegate\b[^{;(]*?\b([A-Za-z_][A-Za-z0-9_]*)\s*\(`)
+	for _, match := range delegateDeclPattern.FindAllStringSubmatch(withoutComments, -1) {
+		if len(match) < 2 {
+			continue
+		}
+		name := match[1]
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+
+	return names
+}
+
+func extractNamespace(root *sitter.Node, sourceCode []byte) string {
+	if root == nil {
+		return ""
+	}
+	for i := 0; i < int(root.NamedChildCount()); i++ {
+		child := root.NamedChild(i)
+		if child == nil {
+			continue
+		}
+		if child.Type() != "namespace_declaration" && child.Type() != "file_scoped_namespace_declaration" {
+			continue
+		}
+		for j := 0; j < int(child.NamedChildCount()); j++ {
+			ns := child.NamedChild(j)
+			if ns == nil {
+				continue
+			}
+			if ns.Type() == "qualified_name" || ns.Type() == "identifier" {
+				return strings.TrimSpace(ns.Content(sourceCode))
+			}
+		}
+	}
+	return ""
+}
+
+func extractTopLevelTypeNames(root *sitter.Node, sourceCode []byte) []string {
+	typeNodes := map[string]bool{
+		"class_declaration":     true,
+		"interface_declaration": true,
+		"struct_declaration":    true,
+		"enum_declaration":      true,
+		"record_declaration":    true,
+		"delegate_declaration":  true,
+	}
+	enclosingTypeNodes := map[string]bool{
+		"class_declaration":     true,
+		"interface_declaration": true,
+		"struct_declaration":    true,
+		"record_declaration":    true,
+		"enum_declaration":      true,
+		"delegate_declaration":  true,
+	}
+
+	seen := make(map[string]bool)
+	var names []string
+	var walk func(*sitter.Node)
+	walk = func(node *sitter.Node) {
+		if node == nil {
+			return
+		}
+		if typeNodes[node.Type()] && isTopLevelDeclaration(node, enclosingTypeNodes) {
+			if name := extractDeclarationName(node, sourceCode); name != "" && !seen[name] {
+				seen[name] = true
+				names = append(names, name)
+			}
+		}
+		for i := 0; i < int(node.NamedChildCount()); i++ {
+			walk(node.NamedChild(i))
+		}
+	}
+	walk(root)
+
+	return names
+}
+
+func isTopLevelDeclaration(node *sitter.Node, enclosingTypeNodes map[string]bool) bool {
+	for p := node.Parent(); p != nil; p = p.Parent() {
+		if enclosingTypeNodes[p.Type()] {
+			return false
+		}
+	}
+	return true
+}
+
+func extractDeclarationName(node *sitter.Node, sourceCode []byte) string {
+	if node == nil {
+		return ""
+	}
+	if named := node.ChildByFieldName("name"); named != nil {
+		return strings.TrimSpace(named.Content(sourceCode))
+	}
+	for i := 0; i < int(node.NamedChildCount()); i++ {
+		child := node.NamedChild(i)
+		if child != nil && child.Type() == "identifier" {
+			return strings.TrimSpace(child.Content(sourceCode))
+		}
+	}
+	return ""
+}
+
+// ExtractCSharpTypeIdentifiers extracts likely type identifiers from code references.
+func ExtractCSharpTypeIdentifiers(source string) []string {
+	normalized := stripCSharpStringsAndComments(source)
+	matches := csharpTypeIdentifierPattern.FindAllString(normalized, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	var identifiers []string
+	for _, match := range matches {
+		if seen[match] {
+			continue
+		}
+		seen[match] = true
+		identifiers = append(identifiers, match)
+	}
+	return identifiers
+}
+
+func stripCSharpComments(source string) string {
+	return stripCSharp(source, false)
+}
+
+func stripCSharpStringsAndComments(source string) string {
+	return stripCSharp(source, true)
+}
+
+func stripCSharp(source string, stripStrings bool) string {
+	var b strings.Builder
+	b.Grow(len(source))
+
+	inLineComment := false
+	inBlockComment := false
+	inString := false
+	inVerbatimString := false
+
+	for i := 0; i < len(source); i++ {
+		ch := source[i]
+		next := byte(0)
+		if i+1 < len(source) {
+			next = source[i+1]
+		}
+
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+				b.WriteByte(ch)
+			}
+			continue
+		}
 		if inBlockComment {
-			if end := strings.Index(trimmed, "*/"); end >= 0 {
-				trimmed = strings.TrimSpace(trimmed[end+2:])
+			if ch == '*' && next == '/' {
 				inBlockComment = false
-			} else {
+				i++
+			}
+			continue
+		}
+		if stripStrings && inString {
+			if ch == '\\' && next != 0 {
+				i++
+				continue
+			}
+			if ch == '"' {
+				inString = false
+			}
+			continue
+		}
+		if stripStrings && inVerbatimString {
+			if ch == '"' {
+				if next == '"' {
+					i++
+					continue
+				}
+				inVerbatimString = false
+			}
+			continue
+		}
+
+		if ch == '/' && next == '/' {
+			inLineComment = true
+			i++
+			continue
+		}
+		if ch == '/' && next == '*' {
+			inBlockComment = true
+			i++
+			continue
+		}
+
+		if stripStrings {
+			if ch == '@' && next == '"' {
+				inVerbatimString = true
+				i++
+				continue
+			}
+			if ch == '"' {
+				inString = true
 				continue
 			}
 		}
 
-		if start := strings.Index(trimmed, "/*"); start >= 0 {
-			if end := strings.Index(trimmed[start+2:], "*/"); end >= 0 {
-				trimmed = strings.TrimSpace(trimmed[:start] + trimmed[start+2+end+2:])
-			} else {
-				trimmed = strings.TrimSpace(trimmed[:start])
-				inBlockComment = true
-			}
-		}
-
-		if idx := strings.Index(trimmed, "//"); idx >= 0 {
-			trimmed = strings.TrimSpace(trimmed[:idx])
-		}
-
-		if !strings.HasPrefix(trimmed, "using ") {
-			continue
-		}
-		if !strings.Contains(trimmed, ";") {
-			continue
-		}
-
-		statement := strings.TrimSpace(strings.TrimSuffix(trimmed, ";"))
-		statement = strings.TrimPrefix(statement, "using ")
-		statement = strings.TrimSpace(statement)
-
-		if strings.HasPrefix(statement, "static ") {
-			statement = strings.TrimSpace(strings.TrimPrefix(statement, "static "))
-		}
-
-		if eq := strings.Index(statement, "="); eq >= 0 {
-			statement = strings.TrimSpace(statement[eq+1:])
-		}
-
-		if statement == "" || strings.HasPrefix(statement, "(") {
-			continue
-		}
-
-		imports = append(imports, CSharpImport{Path: statement})
+		b.WriteByte(ch)
 	}
 
-	return imports
+	return b.String()
 }

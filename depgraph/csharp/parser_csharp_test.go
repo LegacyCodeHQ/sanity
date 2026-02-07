@@ -46,3 +46,36 @@ using System;
 	assert.Len(t, imports, 1)
 	assert.Equal(t, "System", imports[0].Path)
 }
+
+func TestParseCSharpNamespace(t *testing.T) {
+	fileScoped := `
+namespace Acme.Tools;
+public class Program {}
+`
+	assert.Equal(t, "Acme.Tools", ParseCSharpNamespace(fileScoped))
+
+	blockScoped := `
+namespace Acme.Tools {
+    public class Program {}
+}
+`
+	assert.Equal(t, "Acme.Tools", ParseCSharpNamespace(blockScoped))
+}
+
+func TestParseTopLevelCSharpTypeNames(t *testing.T) {
+	source := `
+namespace Acme.Tools;
+
+public class Program
+{
+    public class Nested {}
+}
+
+internal interface IService {}
+public delegate void MessageHandler(string message);
+`
+	names := ParseTopLevelCSharpTypeNames(source)
+
+	assert.ElementsMatch(t, []string{"Program", "IService", "MessageHandler"}, names)
+	assert.NotContains(t, names, "Nested")
+}

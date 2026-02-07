@@ -20,7 +20,14 @@ func (Module) Maturity() langsupport.MaturityLevel {
 }
 
 func (Module) NewResolver(ctx *langsupport.Context, contentReader vcs.ContentReader) langsupport.Resolver {
-	return resolver{ctx: ctx, contentReader: contentReader}
+	namespaceToFiles, namespaceToTypes, fileToNamespace := BuildCSharpIndices(ctx.SuppliedFiles, contentReader)
+	return resolver{
+		ctx:              ctx,
+		contentReader:    contentReader,
+		namespaceToFiles: namespaceToFiles,
+		namespaceToTypes: namespaceToTypes,
+		fileToNamespace:  fileToNamespace,
+	}
 }
 
 func (Module) IsTestFile(filePath string, _ vcs.ContentReader) bool {
@@ -28,12 +35,22 @@ func (Module) IsTestFile(filePath string, _ vcs.ContentReader) bool {
 }
 
 type resolver struct {
-	ctx           *langsupport.Context
-	contentReader vcs.ContentReader
+	ctx              *langsupport.Context
+	contentReader    vcs.ContentReader
+	namespaceToFiles map[string][]string
+	namespaceToTypes map[string]map[string][]string
+	fileToNamespace  map[string]string
 }
 
 func (r resolver) ResolveProjectImports(absPath, filePath, ext string) ([]string, error) {
-	return ResolveCSharpProjectImports(absPath, filePath, r.ctx.SuppliedFiles, r.contentReader)
+	return ResolveCSharpProjectImports(
+		absPath,
+		filePath,
+		r.namespaceToFiles,
+		r.namespaceToTypes,
+		r.fileToNamespace,
+		r.ctx.SuppliedFiles,
+		r.contentReader)
 }
 
 func (resolver) FinalizeGraph(_ langsupport.Graph) error {
