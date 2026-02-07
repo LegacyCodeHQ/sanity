@@ -1,5 +1,5 @@
 ---
-name: language-support-validation
+name: verify-language-support
 description: End-to-end workflow for validating language support changes in the sanity dependency graph analyzer
 ---
 
