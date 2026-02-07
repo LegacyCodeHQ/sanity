@@ -32,16 +32,26 @@ Use this workflow to validate language support end-to-end in `sanity`.
    - Default queue size is 10 commits unless the user requests a different count.
 4. Show the queue to the user before starting graph renders.
 5. Render exactly one commit at a time in the IDE:
+   - Show commit context immediately before the diagram:
+     - `git -C /tmp/<repo> show -s --format='%h %s' <sha>`
+   - In chat, print the commit message line before the Mermaid block so the user knows what change they are reviewing.
    - `go run . graph --repo /tmp/<repo> -c <sha> -f mermaid`
    - Always include the rendered diagram directly in chat (Mermaid fenced block). If Mermaid is not visible, provide DOT/text fallback in chat.
    - If diagrams still are not visible to the user, generate and open the graph URL in the browser (for example `sanity graph -u` or equivalent URL output).
 6. Pause after each commit and wait for explicit user confirmation (for example, `next`) before continuing.
 7. Continue this request/response loop until the queue is complete or the user stops.
-8. Keep validation focused on edge quality for each commit:
+8. After completing the default 10-commit queue, ask:
+   - "Do you want me to proceed with updating maturity level and committing the changes?"
+   - If the user says yes, do it immediately without extra confirmation:
+     - Update module maturity as justified by validation results.
+     - Update `cmd/languages` golden output if changed.
+     - Run quality gates (`make lint`, `make test`).
+     - Commit the changes with a focused `type: subject` message.
+9. Keep validation focused on edge quality for each commit:
    - Production file incorrectly depends on test file
    - Fan-out caused by same-name declarations across source sets/targets
    - Missing edges where symbols are clearly referenced
-9. If the user asks a side question during review (for example what `.in` means), answer briefly and then resume the queue when prompted.
+10. If the user asks a side question during review (for example what `.in` means), answer briefly and then resume the queue when prompted.
 
 ## Fixing Issues
 
