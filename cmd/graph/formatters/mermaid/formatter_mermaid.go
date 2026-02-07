@@ -57,15 +57,16 @@ func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.Rende
 		filePaths = append(filePaths, source)
 	}
 	sort.Strings(filePaths)
+	nodeNames := buildNodeNames(filePaths)
 
-	// Create a mapping from base filename to a valid Mermaid node ID
-	// Mermaid node IDs can't have dots or special characters
+	// Create a mapping from node keys to valid Mermaid node IDs.
+	// Mermaid node IDs can't have dots or special characters.
 	nodeIDs := make(map[string]string)
 	nodeCounter := 0
 	for _, source := range filePaths {
-		sourceBase := filepath.Base(source)
-		if _, exists := nodeIDs[sourceBase]; !exists {
-			nodeIDs[sourceBase] = fmt.Sprintf("n%d", nodeCounter)
+		sourceNodeKey := nodeNames[source]
+		if _, exists := nodeIDs[sourceNodeKey]; !exists {
+			nodeIDs[sourceNodeKey] = fmt.Sprintf("n%d", nodeCounter)
 			nodeCounter++
 		}
 	}
@@ -109,15 +110,15 @@ func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.Rende
 
 	// Define nodes with labels and styles
 	for _, source := range filePaths {
-		sourceBase := filepath.Base(source)
-		nodeID := nodeIDs[sourceBase]
+		sourceNodeKey := nodeNames[source]
+		nodeID := nodeIDs[sourceNodeKey]
 
-		if !definedNodes[sourceBase] {
+		if !definedNodes[sourceNodeKey] {
 			// Build node label with file stats if available
-			nodeLabel := sourceBase
+			nodeLabel := nodeNames[source]
 			if fileMetadata, ok := g.Meta.Files[source]; ok && fileMetadata.Stats != nil {
 				stats := *fileMetadata.Stats
-				labelPrefix := sourceBase
+				labelPrefix := nodeLabel
 				if stats.IsNew {
 					labelPrefix = fmt.Sprintf("🪴 %s", labelPrefix)
 				}
@@ -144,7 +145,7 @@ func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.Rende
 			nodeLabel = strings.ReplaceAll(nodeLabel, "\"", "#quot;")
 
 			sb.WriteString(fmt.Sprintf("    %s[\"%s\"]\n", nodeID, nodeLabel))
-			definedNodes[sourceBase] = true
+			definedNodes[sourceNodeKey] = true
 		}
 	}
 
@@ -159,11 +160,11 @@ func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.Rende
 		copy(sortedDeps, deps)
 		sort.Strings(sortedDeps)
 
-		sourceBase := filepath.Base(source)
-		sourceID := nodeIDs[sourceBase]
+		sourceNodeKey := nodeNames[source]
+		sourceID := nodeIDs[sourceNodeKey]
 		for _, dep := range sortedDeps {
-			depBase := filepath.Base(dep)
-			depID := nodeIDs[depBase]
+			depNodeKey := nodeNames[dep]
+			depID := nodeIDs[depNodeKey]
 			hasEdges = true
 			edgesSB.WriteString(fmt.Sprintf("    %s --> %s\n", sourceID, depID))
 			edgeMD := g.Meta.Edges[depgraph.FileEdge{From: source, To: dep}]
@@ -188,8 +189,8 @@ func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.Rende
 	hasMultipleExtensions := len(uniqueExtensions) > 1
 
 	for _, source := range filePaths {
-		sourceBase := filepath.Base(source)
-		nodeID := nodeIDs[sourceBase]
+		sourceNodeKey := nodeNames[source]
+		nodeID := nodeIDs[sourceNodeKey]
 
 		fileMetadata, hasFileMetadata := g.Meta.Files[source]
 		if hasFileMetadata && fileMetadata.IsTest {
@@ -221,8 +222,8 @@ func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.Rende
 		if !cycleNodes[source] {
 			continue
 		}
-		sourceBase := filepath.Base(source)
-		stylesSB.WriteString(fmt.Sprintf("    style %s stroke:#d62728,stroke-width:3px\n", nodeIDs[sourceBase]))
+		sourceNodeKey := nodeNames[source]
+		stylesSB.WriteString(fmt.Sprintf("    style %s stroke:#d62728,stroke-width:3px\n", nodeIDs[sourceNodeKey]))
 	}
 	for _, idx := range cycleEdgeIndices {
 		stylesSB.WriteString(fmt.Sprintf("    linkStyle %d stroke:#d62728,stroke-width:3px,stroke-dasharray: 5 5\n", idx))
@@ -238,6 +239,59 @@ func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.Rende
 	}
 
 	return strings.TrimSuffix(sb.String(), "\n"), nil
+}
+
+func buildNodeNames(paths []string) map[string]string {
+	names := make(map[string]string, len(paths))
+	groupedByBase := make(map[string][]string, len(paths))
+	for _, path := range paths {
+		groupedByBase[filepath.Base(path)] = append(groupedByBase[filepath.Base(path)], path)
+	}
+
+	for base, groupedPaths := range groupedByBase {
+		if len(groupedPaths) == 1 {
+			names[groupedPaths[0]] = base
+			continue
+		}
+
+		for depth := 2; ; depth++ {
+			suffixCounts := make(map[string]int, len(groupedPaths))
+			for _, path := range groupedPaths {
+				suffixCounts[pathSuffix(path, depth)]++
+			}
+
+			allDistinct := true
+			for _, path := range groupedPaths {
+				suffix := pathSuffix(path, depth)
+				if suffixCounts[suffix] > 1 {
+					allDistinct = false
+					break
+				}
+			}
+			if !allDistinct {
+				continue
+			}
+
+			for _, path := range groupedPaths {
+				names[path] = pathSuffix(path, depth)
+			}
+			break
+		}
+	}
+
+	return names
+}
+
+func pathSuffix(path string, depth int) string {
+	normalized := filepath.ToSlash(filepath.Clean(path))
+	parts := strings.Split(strings.TrimPrefix(normalized, "/"), "/")
+	if len(parts) == 0 {
+		return normalized
+	}
+	if depth > len(parts) {
+		depth = len(parts)
+	}
+	return strings.Join(parts[len(parts)-depth:], "/")
 }
 
 // GenerateURL creates a mermaid.live URL with the diagram embedded.

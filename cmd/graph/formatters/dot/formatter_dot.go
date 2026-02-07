@@ -61,6 +61,7 @@ func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.Rende
 		filePaths = append(filePaths, source)
 	}
 	sort.Strings(filePaths)
+	nodeNames := buildNodeNames(filePaths)
 
 	extensionColors := getExtensionColors(filePaths)
 
@@ -121,8 +122,9 @@ func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.Rende
 	// First, define node styles based on file extensions
 	for _, source := range filePaths {
 		sourceBase := filepath.Base(source)
+		sourceNodeKey := nodeNames[source]
 
-		if !styledNodes[sourceBase] {
+		if !styledNodes[sourceNodeKey] {
 			var color string
 
 			fileMetadata, hasFileMetadata := g.Meta.Files[source]
@@ -143,10 +145,10 @@ func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.Rende
 			}
 
 			// Build node label with file stats if available
-			nodeLabel := sourceBase
+			nodeLabel := nodeNames[source]
 			if hasFileMetadata && fileMetadata.Stats != nil {
 				stats := *fileMetadata.Stats
-				labelPrefix := sourceBase
+				labelPrefix := nodeLabel
 				if stats.IsNew {
 					labelPrefix = fmt.Sprintf("🪴 %s", labelPrefix)
 				}
@@ -170,11 +172,11 @@ func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.Rende
 			}
 
 			if cycleNodes[source] {
-				sb.WriteString(fmt.Sprintf("  %q [label=%q, style=filled, fillcolor=%s, color=red];\n", sourceBase, nodeLabel, color))
+				sb.WriteString(fmt.Sprintf("  %q [label=%q, style=filled, fillcolor=%s, color=red];\n", sourceNodeKey, nodeLabel, color))
 			} else {
-				sb.WriteString(fmt.Sprintf("  %q [label=%q, style=filled, fillcolor=%s];\n", sourceBase, nodeLabel, color))
+				sb.WriteString(fmt.Sprintf("  %q [label=%q, style=filled, fillcolor=%s];\n", sourceNodeKey, nodeLabel, color))
 			}
-			styledNodes[sourceBase] = true
+			styledNodes[sourceNodeKey] = true
 		}
 	}
 	// Determine whether we have any edges before writing the section separator.
@@ -196,20 +198,73 @@ func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.Rende
 		copy(sortedDeps, deps)
 		sort.Strings(sortedDeps)
 
-		sourceBase := filepath.Base(source)
+		sourceNodeKey := nodeNames[source]
 		for _, dep := range sortedDeps {
-			depBase := filepath.Base(dep)
+			depNodeKey := nodeNames[dep]
 			edgeMD := g.Meta.Edges[depgraph.FileEdge{From: source, To: dep}]
 			if edgeMD.InCycle {
-				sb.WriteString(fmt.Sprintf("  %q -> %q [color=red, style=dashed];\n", sourceBase, depBase))
+				sb.WriteString(fmt.Sprintf("  %q -> %q [color=red, style=dashed];\n", sourceNodeKey, depNodeKey))
 			} else {
-				sb.WriteString(fmt.Sprintf("  %q -> %q;\n", sourceBase, depBase))
+				sb.WriteString(fmt.Sprintf("  %q -> %q;\n", sourceNodeKey, depNodeKey))
 			}
 		}
 	}
 
 	sb.WriteString("}")
 	return sb.String(), nil
+}
+
+func buildNodeNames(paths []string) map[string]string {
+	names := make(map[string]string, len(paths))
+	groupedByBase := make(map[string][]string, len(paths))
+	for _, path := range paths {
+		groupedByBase[filepath.Base(path)] = append(groupedByBase[filepath.Base(path)], path)
+	}
+
+	for base, groupedPaths := range groupedByBase {
+		if len(groupedPaths) == 1 {
+			names[groupedPaths[0]] = base
+			continue
+		}
+
+		for depth := 2; ; depth++ {
+			suffixCounts := make(map[string]int, len(groupedPaths))
+			for _, path := range groupedPaths {
+				suffixCounts[pathSuffix(path, depth)]++
+			}
+
+			allDistinct := true
+			for _, path := range groupedPaths {
+				suffix := pathSuffix(path, depth)
+				if suffixCounts[suffix] > 1 {
+					allDistinct = false
+					break
+				}
+			}
+			if !allDistinct {
+				continue
+			}
+
+			for _, path := range groupedPaths {
+				names[path] = pathSuffix(path, depth)
+			}
+			break
+		}
+	}
+
+	return names
+}
+
+func pathSuffix(path string, depth int) string {
+	normalized := filepath.ToSlash(filepath.Clean(path))
+	parts := strings.Split(strings.TrimPrefix(normalized, "/"), "/")
+	if len(parts) == 0 {
+		return normalized
+	}
+	if depth > len(parts) {
+		depth = len(parts)
+	}
+	return strings.Join(parts[len(parts)-depth:], "/")
 }
 
 // GenerateURL creates a GraphvizOnline URL with the DOT graph embedded.

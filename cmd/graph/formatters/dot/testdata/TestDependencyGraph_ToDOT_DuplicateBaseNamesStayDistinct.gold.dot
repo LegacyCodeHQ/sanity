@@ -1,0 +1,10 @@
+digraph dependencies {
+  rankdir=LR;
+  node [shape=box];
+
+  "lib/utils.js" [label="lib/utils.js", style=filled, fillcolor=white];
+  "res.send.js" [label="res.send.js", style=filled, fillcolor=white];
+  "support/utils.js" [label="support/utils.js", style=filled, fillcolor=white];
+
+  "res.send.js" -> "support/utils.js";
+}

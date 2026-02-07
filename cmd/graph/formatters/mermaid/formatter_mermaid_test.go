@@ -270,3 +270,18 @@ func TestMermaidFormatter_HighlightsCycles(t *testing.T) {
 	g := testhelpers.MermaidGoldie(t)
 	g.Assert(t, t.Name(), []byte(output))
 }
+
+func TestMermaidFormatter_DuplicateBaseNamesStayDistinct(t *testing.T) {
+	graph := testFileGraph(t, map[string][]string{
+		"/project/test/res.send.js":      {"/project/test/support/utils.js"},
+		"/project/test/support/utils.js": {},
+		"/project/lib/utils.js":          {},
+	}, nil)
+
+	formatter := &mermaid.Formatter{}
+	output, err := formatter.Format(graph, formatters.RenderOptions{})
+	require.NoError(t, err)
+
+	g := testhelpers.MermaidGoldie(t)
+	g.Assert(t, t.Name(), []byte(output))
+}
