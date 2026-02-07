@@ -400,6 +400,8 @@ func extractTypeIdentifiersFromTree(root *sitter.Node, sourceCode []byte) []stri
 			collectIfTypeContext(node.NamedChild(0))
 		case "object_creation_expression":
 			collectIfTypeContext(node.NamedChild(0))
+		case "member_access_expression":
+			collectIfTypeContext(node.NamedChild(0))
 		case "cast_expression", "as_expression", "is_expression", "declaration_pattern", "recursive_pattern", "type_of_expression", "default_expression", "sizeof_expression":
 			collectIfTypeContext(node.NamedChild(0))
 		}

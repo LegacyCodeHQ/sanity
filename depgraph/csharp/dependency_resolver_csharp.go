@@ -2,6 +2,7 @@ package csharp
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -11,10 +12,11 @@ import (
 func BuildCSharpIndices(
 	suppliedFiles map[string]bool,
 	contentReader vcs.ContentReader,
-) (map[string][]string, map[string]map[string][]string, map[string]string) {
+) (map[string][]string, map[string]map[string][]string, map[string]string, map[string]string) {
 	namespaceToFiles := make(map[string][]string)
 	namespaceToTypes := make(map[string]map[string][]string)
 	fileToNamespace := make(map[string]string)
+	fileToScope := make(map[string]string)
 
 	for filePath := range suppliedFiles {
 		if filepath.Ext(filePath) != ".cs" {
@@ -29,24 +31,27 @@ func BuildCSharpIndices(
 		source := string(content)
 		namespace := ParseCSharpNamespace(source)
 		fileToNamespace[filePath] = namespace
-		namespaceToFiles[namespace] = append(namespaceToFiles[namespace], filePath)
+		scope := inferCSharpFileScope(filePath)
+		fileToScope[filePath] = scope
+		scopedNamespace := scopeKey(scope, namespace)
+		namespaceToFiles[scopedNamespace] = append(namespaceToFiles[scopedNamespace], filePath)
 
 		typeNames := ParseTopLevelCSharpTypeNames(source)
 		if len(typeNames) == 0 {
 			continue
 		}
 
-		typeMap, ok := namespaceToTypes[namespace]
+		typeMap, ok := namespaceToTypes[scopedNamespace]
 		if !ok {
 			typeMap = make(map[string][]string)
-			namespaceToTypes[namespace] = typeMap
+			namespaceToTypes[scopedNamespace] = typeMap
 		}
 		for _, typeName := range typeNames {
 			typeMap[typeName] = append(typeMap[typeName], filePath)
 		}
 	}
 
-	return namespaceToFiles, namespaceToTypes, fileToNamespace
+	return namespaceToFiles, namespaceToTypes, fileToNamespace, fileToScope
 }
 
 func ResolveCSharpProjectImports(
@@ -55,6 +60,7 @@ func ResolveCSharpProjectImports(
 	namespaceToFiles map[string][]string,
 	namespaceToTypes map[string]map[string][]string,
 	fileToNamespace map[string]string,
+	fileToScope map[string]string,
 	suppliedFiles map[string]bool,
 	contentReader vcs.ContentReader,
 ) ([]string, error) {
@@ -82,6 +88,7 @@ func ResolveCSharpProjectImports(
 	}
 
 	importedTypeNames := make(map[string]bool)
+	scope := fileToScope[absPath]
 	for _, imp := range imports {
 		path := imp.Path
 		if path == "" {
@@ -89,7 +96,7 @@ func ResolveCSharpProjectImports(
 		}
 
 		// "using A.B;" form imports a namespace.
-		if typeMap, ok := namespaceToTypes[path]; ok {
+		if typeMap, ok := namespaceToTypes[scopeKey(scope, path)]; ok {
 			for _, ref := range referencedTypes {
 				if declaredTypes[ref] {
 					continue
@@ -114,7 +121,7 @@ func ResolveCSharpProjectImports(
 		if !containsString(referencedTypes, typeName) {
 			continue
 		}
-		typeMap := namespaceToTypes[pkg]
+		typeMap := namespaceToTypes[scopeKey(scope, pkg)]
 		files := typeMap[typeName]
 		if len(files) != 1 {
 			continue
@@ -124,7 +131,7 @@ func ResolveCSharpProjectImports(
 
 	// Same-namespace references do not require using directives in C#.
 	if namespace, ok := fileToNamespace[absPath]; ok {
-		if typeMap, ok := namespaceToTypes[namespace]; ok {
+		if typeMap, ok := namespaceToTypes[scopeKey(scope, namespace)]; ok {
 			for _, ref := range referencedTypes {
 				if declaredTypes[ref] || importedTypeNames[ref] {
 					continue
@@ -140,6 +147,34 @@ func ResolveCSharpProjectImports(
 
 	_ = namespaceToFiles // retained for future namespace-wide heuristics.
 	return resolved, nil
+}
+
+func inferCSharpFileScope(filePath string) string {
+	dir := filepath.Dir(filePath)
+	for {
+		entries, err := os.ReadDir(dir)
+		if err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					continue
+				}
+				if strings.HasSuffix(entry.Name(), ".csproj") {
+					return filepath.Join(dir, entry.Name())
+				}
+			}
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return filepath.Dir(filePath)
+}
+
+func scopeKey(scope, namespace string) string {
+	return scope + "::" + namespace
 }
 
 func containsString(values []string, target string) bool {

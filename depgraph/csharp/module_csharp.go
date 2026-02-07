@@ -20,13 +20,14 @@ func (Module) Maturity() langsupport.MaturityLevel {
 }
 
 func (Module) NewResolver(ctx *langsupport.Context, contentReader vcs.ContentReader) langsupport.Resolver {
-	namespaceToFiles, namespaceToTypes, fileToNamespace := BuildCSharpIndices(ctx.SuppliedFiles, contentReader)
+	namespaceToFiles, namespaceToTypes, fileToNamespace, fileToScope := BuildCSharpIndices(ctx.SuppliedFiles, contentReader)
 	return resolver{
 		ctx:              ctx,
 		contentReader:    contentReader,
 		namespaceToFiles: namespaceToFiles,
 		namespaceToTypes: namespaceToTypes,
 		fileToNamespace:  fileToNamespace,
+		fileToScope:      fileToScope,
 	}
 }
 
@@ -40,6 +41,7 @@ type resolver struct {
 	namespaceToFiles map[string][]string
 	namespaceToTypes map[string]map[string][]string
 	fileToNamespace  map[string]string
+	fileToScope      map[string]string
 }
 
 func (r resolver) ResolveProjectImports(absPath, filePath, ext string) ([]string, error) {
@@ -49,6 +51,7 @@ func (r resolver) ResolveProjectImports(absPath, filePath, ext string) ([]string
 		r.namespaceToFiles,
 		r.namespaceToTypes,
 		r.fileToNamespace,
+		r.fileToScope,
 		r.ctx.SuppliedFiles,
 		r.contentReader)
 }

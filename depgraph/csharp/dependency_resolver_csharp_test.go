@@ -14,6 +14,7 @@ func TestResolveCSharpProjectImports(t *testing.T) {
 	tmpDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "App"), 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "Lib"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "Test.csproj"), []byte(`<Project Sdk="Microsoft.NET.Sdk"></Project>`), 0o644))
 
 	programPath := filepath.Join(tmpDir, "App", "Program.cs")
 	require.NoError(t, os.WriteFile(programPath, []byte(`using Lib.Core;
@@ -52,7 +53,7 @@ public class Helper {}
 		helperPath:     true,
 	}
 	reader := vcs.FilesystemContentReader()
-	namespaceToFiles, namespaceToTypes, fileToNamespace := BuildCSharpIndices(supplied, reader)
+	namespaceToFiles, namespaceToTypes, fileToNamespace, fileToScope := BuildCSharpIndices(supplied, reader)
 
 	imports, err := ResolveCSharpProjectImports(
 		programPath,
@@ -60,6 +61,7 @@ public class Helper {}
 		namespaceToFiles,
 		namespaceToTypes,
 		fileToNamespace,
+		fileToScope,
 		supplied,
 		reader)
 	require.NoError(t, err)
@@ -70,6 +72,7 @@ func TestResolveCSharpProjectImports_SkipsAmbiguousType(t *testing.T) {
 	tmpDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "A"), 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "B"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "Test.csproj"), []byte(`<Project Sdk="Microsoft.NET.Sdk"></Project>`), 0o644))
 
 	programPath := filepath.Join(tmpDir, "Program.cs")
 	require.NoError(t, os.WriteFile(programPath, []byte(`using Shared;
@@ -92,7 +95,7 @@ public class Service {}
 		serviceBPath: true,
 	}
 	reader := vcs.FilesystemContentReader()
-	namespaceToFiles, namespaceToTypes, fileToNamespace := BuildCSharpIndices(supplied, reader)
+	namespaceToFiles, namespaceToTypes, fileToNamespace, fileToScope := BuildCSharpIndices(supplied, reader)
 
 	imports, err := ResolveCSharpProjectImports(
 		programPath,
@@ -100,6 +103,7 @@ public class Service {}
 		namespaceToFiles,
 		namespaceToTypes,
 		fileToNamespace,
+		fileToScope,
 		supplied,
 		reader)
 	require.NoError(t, err)
@@ -138,7 +142,7 @@ public interface IRoomGrain {}
 		iRoomPath:   true,
 	}
 	reader := vcs.FilesystemContentReader()
-	namespaceToFiles, namespaceToTypes, fileToNamespace := BuildCSharpIndices(supplied, reader)
+	namespaceToFiles, namespaceToTypes, fileToNamespace, fileToScope := BuildCSharpIndices(supplied, reader)
 
 	imports, err := ResolveCSharpProjectImports(
 		monsterPath,
@@ -146,9 +150,69 @@ public interface IRoomGrain {}
 		namespaceToFiles,
 		namespaceToTypes,
 		fileToNamespace,
+		fileToScope,
 		supplied,
 		reader)
 	require.NoError(t, err)
 	assert.Contains(t, imports, iRoomPath)
 	assert.NotContains(t, imports, roomPath)
+}
+
+func TestResolveCSharpProjectImports_SeparatesDuplicateTypesByProjectScope(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	startDir := filepath.Join(tmpDir, "start")
+	finishedDir := filepath.Join(tmpDir, "finished")
+	require.NoError(t, os.MkdirAll(startDir, 0o755))
+	require.NoError(t, os.MkdirAll(finishedDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(startDir, "start.csproj"), []byte(`<Project Sdk="Microsoft.NET.Sdk"></Project>`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(finishedDir, "finished.csproj"), []byte(`<Project Sdk="Microsoft.NET.Sdk"></Project>`), 0o644))
+
+	startProgramPath := filepath.Join(startDir, "Program.cs")
+	require.NoError(t, os.WriteFile(startProgramPath, []byte(`using Calculators;
+using ConsumerVehicleRegistration;
+public class Program { void Run(Car c) { _ = TollCalculator.CalculateToll(c); } }
+`), 0o644))
+	startCalculatorPath := filepath.Join(startDir, "TollCalculator.cs")
+	require.NoError(t, os.WriteFile(startCalculatorPath, []byte(`namespace Calculators;
+public static class TollCalculator { public static decimal CalculateToll(object vehicle) => 0; }
+`), 0o644))
+	startExternalPath := filepath.Join(startDir, "ExternalSystems.cs")
+	require.NoError(t, os.WriteFile(startExternalPath, []byte(`namespace ConsumerVehicleRegistration;
+public class Car { public int Passengers { get; set; } }
+`), 0o644))
+
+	finishedCalculatorPath := filepath.Join(finishedDir, "TollCalculator.cs")
+	require.NoError(t, os.WriteFile(finishedCalculatorPath, []byte(`namespace Calculators;
+public static class TollCalculator { public static decimal CalculateToll(object vehicle) => 1; }
+`), 0o644))
+	finishedExternalPath := filepath.Join(finishedDir, "ExternalSystems.cs")
+	require.NoError(t, os.WriteFile(finishedExternalPath, []byte(`namespace ConsumerVehicleRegistration;
+public class Car { public int Passengers { get; set; } }
+`), 0o644))
+
+	supplied := map[string]bool{
+		startProgramPath:       true,
+		startCalculatorPath:    true,
+		startExternalPath:      true,
+		finishedCalculatorPath: true,
+		finishedExternalPath:   true,
+	}
+	reader := vcs.FilesystemContentReader()
+	namespaceToFiles, namespaceToTypes, fileToNamespace, fileToScope := BuildCSharpIndices(supplied, reader)
+
+	imports, err := ResolveCSharpProjectImports(
+		startProgramPath,
+		startProgramPath,
+		namespaceToFiles,
+		namespaceToTypes,
+		fileToNamespace,
+		fileToScope,
+		supplied,
+		reader)
+	require.NoError(t, err)
+	assert.Contains(t, imports, startCalculatorPath)
+	assert.Contains(t, imports, startExternalPath)
+	assert.NotContains(t, imports, finishedCalculatorPath)
+	assert.NotContains(t, imports, finishedExternalPath)
 }
