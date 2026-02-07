@@ -373,3 +373,18 @@ fun demo(request: ActivateLicenseRequest): ActivateLicenseResponse {
 	assert.Contains(t, identifiers, "ActivateLicenseResponse")
 	assert.Contains(t, identifiers, "Machine")
 }
+
+func TestExtractTypeIdentifiers_ConstructorInvocation(t *testing.T) {
+	source := []byte(`
+package com.example
+
+fun demo() {
+  val event = KLoggingEvent(Level.INFO, null, "test")
+  println(event)
+}
+`)
+
+	identifiers := ExtractTypeIdentifiers(source)
+	assert.Contains(t, identifiers, "KLoggingEvent")
+	assert.NotContains(t, identifiers, "println")
+}

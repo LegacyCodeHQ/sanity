@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/kotlin"
@@ -422,6 +423,7 @@ func ExtractTypeIdentifiers(sourceCode []byte) []string {
 	defer cursor.Close()
 	cursor.Exec(query, tree.RootNode())
 
+	seen := make(map[string]bool)
 	var identifiers []string
 	for {
 		match, ok := cursor.NextMatch()
@@ -430,13 +432,48 @@ func ExtractTypeIdentifiers(sourceCode []byte) []string {
 		}
 		for _, capture := range match.Captures {
 			name := strings.TrimSpace(capture.Node.Content(sourceCode))
-			if name != "" {
+			if name != "" && !seen[name] {
+				seen[name] = true
+				identifiers = append(identifiers, name)
+			}
+		}
+	}
+
+	// Kotlin constructor-style calls like `Foo(...)` are represented as
+	// call_expression(simple_identifier), not type_identifier.
+	constructorQuery, err := sitter.NewQuery([]byte("(call_expression (simple_identifier) @constructor.name)"), lang)
+	if err != nil {
+		return identifiers
+	}
+	defer constructorQuery.Close()
+
+	constructorCursor := sitter.NewQueryCursor()
+	defer constructorCursor.Close()
+	constructorCursor.Exec(constructorQuery, tree.RootNode())
+
+	for {
+		match, ok := constructorCursor.NextMatch()
+		if !ok {
+			break
+		}
+		for _, capture := range match.Captures {
+			name := strings.TrimSpace(capture.Node.Content(sourceCode))
+			if isUpperCamelIdentifier(name) && !seen[name] {
+				seen[name] = true
 				identifiers = append(identifiers, name)
 			}
 		}
 	}
 
 	return identifiers
+}
+
+func isUpperCamelIdentifier(name string) bool {
+	if name == "" {
+		return false
+	}
+	r, _ := utf8.DecodeRuneInString(name)
+	return unicode.IsUpper(r)
 }
 
 // isTopLevelDeclaration checks if a node is declared directly in the source file
