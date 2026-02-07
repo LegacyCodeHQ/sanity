@@ -27,17 +27,24 @@ func runSetup(_ *cobra.Command, _ []string) error {
 	}
 
 	// Create/update AGENTS.md
-	if err := writeAgentsFile("AGENTS.md"); err != nil {
+	created, err := writeAgentsFile("AGENTS.md")
+	if err != nil {
 		return err
+	}
+
+	if created {
+		fmt.Println("✓ Created AGENTS.md with sanity usage instructions")
+	} else {
+		fmt.Println("✓ Updated AGENTS.md with sanity usage instructions")
 	}
 
 	return nil
 }
 
-func writeAgentsFile(filename string) error {
+func writeAgentsFile(filename string) (bool, error) {
 	_, err := filepath.Abs(filename)
 	if err != nil {
-		return fmt.Errorf("failed to get absolute path: %w", err)
+		return false, fmt.Errorf("failed to get absolute path: %w", err)
 	}
 
 	// Check if file exists
@@ -48,20 +55,20 @@ func writeAgentsFile(filename string) error {
 		// Append to existing file
 		f, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
-			return fmt.Errorf("failed to open %s: %w", filename, err)
+			return false, fmt.Errorf("failed to open %s: %w", filename, err)
 		}
 		defer f.Close()
 
 		// Add newline before appending
 		if _, err := f.WriteString("\n" + setupTemplate); err != nil {
-			return fmt.Errorf("failed to append to %s: %w", filename, err)
+			return false, fmt.Errorf("failed to append to %s: %w", filename, err)
 		}
 	} else {
 		// Create new file or overwrite
 		if err := os.WriteFile(filename, []byte(setupTemplate), 0644); err != nil {
-			return fmt.Errorf("failed to write %s: %w", filename, err)
+			return false, fmt.Errorf("failed to write %s: %w", filename, err)
 		}
 	}
 
-	return nil
+	return !fileExists, nil
 }
