@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -33,19 +32,9 @@ func GetUncommittedFileStats(repoPath string) (map[string]vcs.FileStats, error) 
 
 	// Run git diff --numstat to get stats for uncommitted changes
 	// This includes both staged and unstaged changes
-	cmd := exec.Command("git", "diff", "--numstat", "HEAD")
-	cmd.Dir = repoPath
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return nil, fmt.Errorf("git command failed: %s", stderr.String())
-		}
-		return nil, err
+	stdout, stderr, err := runGitCommand(repoPath, "diff", "--numstat", "HEAD")
+	if err != nil {
+		return nil, gitCommandError(err, stderr)
 	}
 
 	statusMap, err := getUncommittedFileStatuses(repoPath)
@@ -55,7 +44,7 @@ func GetUncommittedFileStats(repoPath string) (map[string]vcs.FileStats, error) 
 
 	// Parse the numstat output
 	stats := make(map[string]vcs.FileStats)
-	lines := strings.Split(stdout.String(), "\n")
+	lines := strings.Split(string(stdout), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -143,19 +132,9 @@ func GetCommitFileStats(repoPath, commitID string) (map[string]vcs.FileStats, er
 
 	// Run git show --numstat to get stats for the commit
 	// Use --root flag to handle root commits
-	cmd := exec.Command("git", "show", "--numstat", "--format=", commitID)
-	cmd.Dir = repoPath
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return nil, fmt.Errorf("git command failed: %s", stderr.String())
-		}
-		return nil, err
+	stdout, stderr, err := runGitCommand(repoPath, "show", "--numstat", "--format=", commitID)
+	if err != nil {
+		return nil, gitCommandError(err, stderr)
 	}
 
 	statusMap, err := getCommitFileStatuses(repoPath, commitID)
@@ -165,7 +144,7 @@ func GetCommitFileStats(repoPath, commitID string) (map[string]vcs.FileStats, er
 
 	// Parse the numstat output
 	stats := make(map[string]vcs.FileStats)
-	lines := strings.Split(stdout.String(), "\n")
+	lines := strings.Split(string(stdout), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -249,19 +228,9 @@ func GetCommitRangeFileStats(repoPath, fromCommit, toCommit string) (map[string]
 	}
 
 	// Run git diff --numstat to get stats for the range
-	cmd := exec.Command("git", "diff", "--numstat", fromCommit, toCommit)
-	cmd.Dir = repoPath
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return nil, fmt.Errorf("git command failed: %s", stderr.String())
-		}
-		return nil, err
+	stdout, stderr, err := runGitCommand(repoPath, "diff", "--numstat", fromCommit, toCommit)
+	if err != nil {
+		return nil, gitCommandError(err, stderr)
 	}
 
 	// Get file statuses to determine if files are new
@@ -272,7 +241,7 @@ func GetCommitRangeFileStats(repoPath, fromCommit, toCommit string) (map[string]
 
 	// Parse the numstat output
 	stats := make(map[string]vcs.FileStats)
-	lines := strings.Split(stdout.String(), "\n")
+	lines := strings.Split(string(stdout), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -318,23 +287,13 @@ func GetCommitRangeFileStats(repoPath, fromCommit, toCommit string) (map[string]
 
 // getUncommittedFileStatuses returns a map of relative file paths to their git status codes
 func getUncommittedFileStatuses(repoPath string) (map[string]string, error) {
-	cmd := exec.Command("git", "status", "--porcelain", "--untracked-files=all")
-	cmd.Dir = repoPath
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return nil, fmt.Errorf("git command failed: %s", stderr.String())
-		}
-		return nil, err
+	stdout, stderr, err := runGitCommand(repoPath, "status", "--porcelain", "--untracked-files=all")
+	if err != nil {
+		return nil, gitCommandError(err, stderr)
 	}
 
 	statuses := make(map[string]string)
-	lines := strings.Split(stdout.String(), "\n")
+	lines := strings.Split(string(stdout), "\n")
 	for _, line := range lines {
 		if len(line) < 4 {
 			continue
@@ -362,23 +321,13 @@ func getUncommittedFileStatuses(repoPath string) (map[string]string, error) {
 
 // getCommitFileStatuses returns a map of file paths to their status codes for a commit
 func getCommitFileStatuses(repoPath, commitID string) (map[string]string, error) {
-	cmd := exec.Command("git", "show", "--name-status", "--format=", commitID)
-	cmd.Dir = repoPath
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return nil, fmt.Errorf("git command failed: %s", stderr.String())
-		}
-		return nil, err
+	stdout, stderr, err := runGitCommand(repoPath, "show", "--name-status", "--format=", commitID)
+	if err != nil {
+		return nil, gitCommandError(err, stderr)
 	}
 
 	statuses := make(map[string]string)
-	lines := strings.Split(stdout.String(), "\n")
+	lines := strings.Split(string(stdout), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -414,23 +363,13 @@ func getCommitFileStatuses(repoPath, commitID string) (map[string]string, error)
 
 // getCommitRangeFileStatuses returns a map of file paths to their status codes for a commit range
 func getCommitRangeFileStatuses(repoPath, fromCommit, toCommit string) (map[string]string, error) {
-	cmd := exec.Command("git", "diff", "--name-status", fromCommit, toCommit)
-	cmd.Dir = repoPath
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return nil, fmt.Errorf("git command failed: %s", stderr.String())
-		}
-		return nil, err
+	stdout, stderr, err := runGitCommand(repoPath, "diff", "--name-status", fromCommit, toCommit)
+	if err != nil {
+		return nil, gitCommandError(err, stderr)
 	}
 
 	statuses := make(map[string]string)
-	lines := strings.Split(stdout.String(), "\n")
+	lines := strings.Split(string(stdout), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {

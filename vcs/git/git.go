@@ -1,7 +1,6 @@
 package git
 
 import (
-	"bytes"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -10,30 +9,18 @@ import (
 
 // isGitRepository checks if the given path is inside a git repository
 func isGitRepository(path string) bool {
-	cmd := exec.Command("git", "rev-parse", "--git-dir")
-	cmd.Dir = path
-	err := cmd.Run()
+	_, _, err := runGitCommand(path, "rev-parse", "--git-dir")
 	return err == nil
 }
 
 // GetRepositoryRoot returns the absolute path to the repository root
 func GetRepositoryRoot(repoPath string) (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	cmd.Dir = repoPath
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return "", fmt.Errorf("git command failed: %s", stderr.String())
-		}
-		return "", err
+	stdout, stderr, err := runGitCommand(repoPath, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", gitCommandError(err, stderr)
 	}
 
-	return strings.TrimSpace(stdout.String()), nil
+	return strings.TrimSpace(string(stdout)), nil
 }
 
 // filterDartFiles filters a list of file paths to include only .dart files
@@ -93,15 +80,10 @@ func validateCommit(repoPath, commitID string) error {
 		return err
 	}
 
-	cmd := exec.Command("git", "rev-parse", "--verify", commitID+"^{commit}")
-	cmd.Dir = repoPath
-
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return fmt.Errorf("invalid commit reference '%s': %s", commitID, strings.TrimSpace(stderr.String()))
+	_, stderr, err := runGitCommand(repoPath, "rev-parse", "--verify", commitID+"^{commit}")
+	if err != nil {
+		if stderr != "" {
+			return fmt.Errorf("invalid commit reference '%s': %s", commitID, stderr)
 		}
 		return fmt.Errorf("invalid commit reference '%s'", commitID)
 	}
@@ -111,22 +93,12 @@ func validateCommit(repoPath, commitID string) error {
 
 // GetCurrentCommitHash returns the current commit hash (HEAD)
 func GetCurrentCommitHash(repoPath string) (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
-	cmd.Dir = repoPath
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return "", fmt.Errorf("git command failed: %s", stderr.String())
-		}
-		return "", err
+	stdout, stderr, err := runGitCommand(repoPath, "rev-parse", "--short", "HEAD")
+	if err != nil {
+		return "", gitCommandError(err, stderr)
 	}
 
-	return strings.TrimSpace(stdout.String()), nil
+	return strings.TrimSpace(string(stdout)), nil
 }
 
 // GetShortCommitHash returns the short version of a given commit hash
@@ -135,43 +107,23 @@ func GetShortCommitHash(repoPath, commitID string) (string, error) {
 		return "", err
 	}
 
-	cmd := exec.Command("git", "rev-parse", "--short", commitID)
-	cmd.Dir = repoPath
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return "", fmt.Errorf("git command failed: %s", stderr.String())
-		}
-		return "", err
+	stdout, stderr, err := runGitCommand(repoPath, "rev-parse", "--short", commitID)
+	if err != nil {
+		return "", gitCommandError(err, stderr)
 	}
 
-	return strings.TrimSpace(stdout.String()), nil
+	return strings.TrimSpace(string(stdout)), nil
 }
 
 // HasUncommittedChanges checks if there are any uncommitted changes in the repository
 func HasUncommittedChanges(repoPath string) (bool, error) {
-	cmd := exec.Command("git", "status", "--porcelain")
-	cmd.Dir = repoPath
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return false, fmt.Errorf("git command failed: %s", stderr.String())
-		}
-		return false, err
+	stdout, stderr, err := runGitCommand(repoPath, "status", "--porcelain")
+	if err != nil {
+		return false, gitCommandError(err, stderr)
 	}
 
 	// If output is not empty, there are uncommitted changes
-	return strings.TrimSpace(stdout.String()) != "", nil
+	return strings.TrimSpace(string(stdout)) != "", nil
 }
 
 // ParseCommitRange parses a commit specification and returns the from/to commits.
@@ -202,9 +154,7 @@ func isAncestor(repoPath, possibleAncestor, possibleDescendant string) (bool, er
 		return false, err
 	}
 
-	cmd := exec.Command("git", "merge-base", "--is-ancestor", possibleAncestor, possibleDescendant)
-	cmd.Dir = repoPath
-	err := cmd.Run()
+	_, _, err := runGitCommand(repoPath, "merge-base", "--is-ancestor", possibleAncestor, possibleDescendant)
 	if err != nil {
 		// Exit code 1 means not an ancestor, which is not an error for our purposes
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {

@@ -1,10 +1,8 @@
 package git
 
 import (
-	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 )
 
@@ -41,28 +39,18 @@ func GetUncommittedFiles(repoPath string) ([]string, error) {
 
 // getUncommittedFiles returns a list of all uncommitted files (relative to repo root)
 func getUncommittedFiles(repoPath string) ([]string, error) {
-	cmd := exec.Command("git", "status", "--porcelain", "--untracked-files=all")
-	cmd.Dir = repoPath
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			// Check if git is not installed
-			if strings.Contains(stderr.String(), "not found") || strings.Contains(stderr.String(), "not recognized") {
-				return nil, fmt.Errorf("git command not found - please install Git to use the --repo flag")
-			}
-			return nil, fmt.Errorf("git command failed: %s", stderr.String())
+	stdout, stderr, err := runGitCommand(repoPath, "status", "--porcelain", "--untracked-files=all")
+	if err != nil {
+		// Check if git is not installed
+		if strings.Contains(stderr, "not found") || strings.Contains(stderr, "not recognized") {
+			return nil, fmt.Errorf("git command not found - please install Git to use the --repo flag")
 		}
-		return nil, err
+		return nil, gitCommandError(err, stderr)
 	}
 
 	// Parse the porcelain output
 	var files []string
-	lines := strings.Split(stdout.String(), "\n")
+	lines := strings.Split(string(stdout), "\n")
 	for _, line := range lines {
 		if len(line) < 3 {
 			continue
@@ -133,24 +121,14 @@ func GetCommitDartFiles(repoPath, commitID string) ([]string, error) {
 func getCommitFiles(repoPath, commitID string) ([]string, error) {
 	// Use --root flag to handle root commits (first commit in repo)
 	// Use --diff-filter=d to exclude deleted files (only include added, modified, and renamed files)
-	cmd := exec.Command("git", "diff-tree", "--no-commit-id", "--name-only", "-r", "--root", "--diff-filter=d", commitID)
-	cmd.Dir = repoPath
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return nil, fmt.Errorf("git command failed: %s", stderr.String())
-		}
-		return nil, err
+	stdout, stderr, err := runGitCommand(repoPath, "diff-tree", "--no-commit-id", "--name-only", "-r", "--root", "--diff-filter=d", commitID)
+	if err != nil {
+		return nil, gitCommandError(err, stderr)
 	}
 
 	// Parse the output - one file per line
 	var files []string
-	lines := strings.Split(stdout.String(), "\n")
+	lines := strings.Split(string(stdout), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line != "" {
@@ -174,22 +152,15 @@ func GetFileContentFromCommit(repoPath, commitID, filePath string) ([]byte, erro
 	// Format: commit:path
 	ref := fmt.Sprintf("%s:%s", commitID, filePath)
 
-	cmd := exec.Command("git", "show", ref)
-	cmd.Dir = repoPath
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return nil, fmt.Errorf("git show failed: %s", stderr.String())
+	stdout, stderr, err := runGitCommand(repoPath, "show", ref)
+	if err != nil {
+		if stderr != "" {
+			return nil, fmt.Errorf("git show failed: %s", stderr)
 		}
 		return nil, err
 	}
 
-	return stdout.Bytes(), nil
+	return stdout, nil
 }
 
 // GetCommitRangeFiles finds all files changed between two commits.
@@ -222,24 +193,14 @@ func GetCommitRangeFiles(repoPath, fromCommit, toCommit string) ([]string, error
 
 	// Get files changed between the two commits
 	// --diff-filter=d excludes deleted files (only include added, modified, and renamed files)
-	cmd := exec.Command("git", "diff", "--name-only", "--diff-filter=d", fromCommit, toCommit)
-	cmd.Dir = repoPath
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return nil, fmt.Errorf("git command failed: %s", stderr.String())
-		}
-		return nil, err
+	stdout, stderr, err := runGitCommand(repoPath, "diff", "--name-only", "--diff-filter=d", fromCommit, toCommit)
+	if err != nil {
+		return nil, gitCommandError(err, stderr)
 	}
 
 	// Parse the output - one file per line
 	var files []string
-	lines := strings.Split(stdout.String(), "\n")
+	lines := strings.Split(string(stdout), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line != "" {
