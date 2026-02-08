@@ -1,4 +1,4 @@
-.PHONY: test test-update-golden test-coverage coverage coverage-html clean help build-dev release-check lint security tools
+.PHONY: test test-update-golden test-coverage coverage coverage-html clean help build-dev release-check lint security tools format
 
 # Version information (can be overridden via command line)
 # Try to get version from git tag, otherwise use "dev"
@@ -16,6 +16,7 @@ help:
 	@echo ""
 	@echo "Testing:"
 	@echo "  tools              - Install/update local tooling (bin/)"
+	@echo "  format             - Run gofmt -s on all Go files"
 	@echo "  lint               - Run golangci-lint"
 	@echo "  vulncheck          - Run govulncheck"
 	@echo "  test               - Run all tests"
@@ -45,6 +46,10 @@ tools:
 	@[ -x $(TOOLS_BIN)/golangci-lint ] || GOBIN=$(TOOLS_BIN) go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	@[ -x $(TOOLS_BIN)/go-consistent ] || GOBIN=$(TOOLS_BIN) go install github.com/quasilyte/go-consistent@$(GO_CONSISTENT_VERSION)
 	@[ -x $(TOOLS_BIN)/govulncheck ] || GOBIN=$(TOOLS_BIN) go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
+
+# Format Go source files
+format:
+	gofmt -s -w $$(find . -name '*.go' -not -path './.git/*')
 
 # Run linters
 lint: tools
