@@ -59,20 +59,17 @@ Sanity uses a file-based dependency graph to visualize the impact of AI-generate
 
 - The files changed and the relationships between them
 - The order to review files (simple answer: review from right-to-left)
-- Color-coded files by extensions to quickly categorize and group them for review
-- Identify test files at a glance
-- Help you build an accurate mental model of the system as you evolve it
+- Color-coded files by extension to help you quickly categorize and group them for review
+- Test files at a glance
+- An accurate mental model of the system as you evolve it
 
-## Visuals
+## See Sanity in Action
 
-<p align="center">
-  <img src="docs/images/go-example.png" alt="Go">
-  <small>Fig. 1: Relationships between impacted files are shown and tests are highlighted in green.</small>
-</p>
+Sanity works with Desktop and IDE coding agents. If you are using a CLI coding agent, the agent can open diagrams in your browser for review.
 
 <p align="center">
-  <img src="docs/images/kotlin-example.png" alt="Kotlin">
-  <small>Fig. 2: New files are marked with a 🪴 emoji.</small>
+  <img src="docs/images/sanity+codex-app.png" alt="Sanity graph in Codex app">
+  <small>Sanity shows impacted files and highlights tests in green.</small>
 </p>
 
 ## Supported Languages
