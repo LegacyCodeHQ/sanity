@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/LegacyCodeHQ/sanity/internal/testhelpers"
 )
 
 func TestWhyCommand_TextDirectDependency(t *testing.T) {
@@ -320,4 +322,84 @@ func TestX() {
 	if !strings.Contains(output, "L") || !strings.Contains(output, "(calls method *Graph)") {
 		t.Fatalf("expected method+line relationship label in mermaid, got:\n%s", output)
 	}
+}
+
+func TestWhyCommand_DOTFormat_Golden(t *testing.T) {
+	repoDir := t.TempDir()
+	targetPath := filepath.Join(repoDir, "target.go")
+	sourcePath := filepath.Join(repoDir, "source_test.go")
+
+	target := `package why
+const Pi = 3.14
+type Graph struct{}
+func ParseSwiftImports() {}
+func (g *Graph) Resolve() {}
+`
+	source := `package why
+func TestX() {
+	ParseSwiftImports()
+	var g Graph
+	g.Resolve()
+	_ = Pi
+}
+`
+	if err := os.WriteFile(targetPath, []byte(target), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(sourcePath, []byte(source), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	cmd := NewCommand()
+	cmd.SetArgs([]string{"-r", repoDir, "-f", "dot", "target.go", "source_test.go"})
+
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("cmd.Execute() error = %v", err)
+	}
+
+	g := testhelpers.DotGoldie(t)
+	g.Assert(t, t.Name(), stdout.Bytes())
+}
+
+func TestWhyCommand_MermaidFormat_Golden(t *testing.T) {
+	repoDir := t.TempDir()
+	targetPath := filepath.Join(repoDir, "target.go")
+	sourcePath := filepath.Join(repoDir, "source_test.go")
+
+	target := `package why
+const Pi = 3.14
+type Graph struct{}
+func ParseSwiftImports() {}
+func (g *Graph) Resolve() {}
+`
+	source := `package why
+func TestX() {
+	ParseSwiftImports()
+	var g Graph
+	g.Resolve()
+	_ = Pi
+}
+`
+	if err := os.WriteFile(targetPath, []byte(target), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(sourcePath, []byte(source), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	cmd := NewCommand()
+	cmd.SetArgs([]string{"-r", repoDir, "-f", "mermaid", "target.go", "source_test.go"})
+
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("cmd.Execute() error = %v", err)
+	}
+
+	g := testhelpers.MermaidGoldie(t)
+	g.Assert(t, t.Name(), stdout.Bytes())
 }
