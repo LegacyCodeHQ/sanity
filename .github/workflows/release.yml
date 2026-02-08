@@ -55,6 +55,34 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  publish-npm:
+    name: Publish npm Package
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Update npm for OIDC trusted publishing
+        run: npm install -g npm@latest
+
+      - name: Set package version from tag
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          npm version "$VERSION" --no-git-tag-version
+
+      - name: Publish to npm
+        run: npm publish --access public --provenance
+
   update-homebrew:
     name: Update Homebrew Tap
     needs: goreleaser
@@ -103,7 +131,7 @@ jobs:
             desc "CLI tool for analyzing and visualizing dependency graphs"
             homepage "https://github.com/LegacyCodeHQ/sanity"
             version "${VERSION}"
-            license "MIT"
+            license "AGPL-3.0-only"
 
             on_macos do
               if Hardware::CPU.arm?

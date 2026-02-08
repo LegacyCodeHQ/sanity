@@ -1,0 +1,39 @@
+{
+  "name": "@legacycodehq/sanity",
+  "version": "0.0.0-dev",
+  "description": "Sanity CLI npm wrapper package",
+  "license": "AGPL-3.0-only",
+  "homepage": "https://github.com/LegacyCodeHQ/sanity",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LegacyCodeHQ/sanity.git"
+  },
+  "bugs": {
+    "url": "https://github.com/LegacyCodeHQ/sanity/issues"
+  },
+  "bin": {
+    "sanity": "bin/sanity.js"
+  },
+  "files": [
+    "bin/sanity.js",
+    "scripts/postinstall.js"
+  ],
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
+}

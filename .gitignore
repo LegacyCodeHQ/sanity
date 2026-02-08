@@ -4,6 +4,8 @@
 
 # application binary
 sanity
+bin/sanity
+bin/sanity.exe
 
 # coverage files
 coverage.out
