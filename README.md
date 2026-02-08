@@ -6,6 +6,22 @@
 
 [Audit AI-generated code](https://youtu.be/EqOwJnZSiQs), understand codebases, and stabilize vibe-coded apps.
 
+## Quick Start
+
+**Step 1:** Install on macOS/Linux using Homebrew:
+
+```bash
+brew install sanity
+```
+
+**Step 2:** Inside your project:
+
+```bash
+sanity setup  # Add usage instructions to AGENTS.md for your coding agent
+```
+
+For other installation methods (pre-built binaries, build from source, Go install), see the [Installation Guide](docs/usage/installation.md).
+
 ## The Problem
 
 Every time a coding agent makes changes to your codebase, you have the following questions:
@@ -59,67 +75,3 @@ Sanity uses a file-based dependency graph to visualize the impact of AI-generate
 - Rust
 - Swift
 - TypeScript
-
-## Quick Start
-
-### Installation
-
-Install on Linux and Mac using Homebrew:
-
-```bash
-brew install LegacyCodeHQ/tap/sanity
-```
-
-For other installation methods (pre-built binaries, build from source, Go install), see
-the [Installation Guide](docs/usage/installation.md).
-
-## Usage
-
-### Commands
-
-#### `sanity graph`
-
-Generate file-based dependency graphs for supported files.
-
-**Flags**:
-
-| Flag             | Description                  | Notes          |
-|------------------|------------------------------|----------------|
-| `--repo`, `-r`   | Git repository path          | Default: "."   |
-| `--commit`, `-c` | Git commit to analyze        |                |
-| `--format`, `-f` | Output format (dot, mermaid) | Default: "dot" |
-
-**Examples**:
-
-```bash
-# Analyze uncommitted files in current repository (most common use case)
-sanity graph
-
-# Output dependency graph in JSON format
-sanity graph --format=json
-
-# Analyze files changed in a specific commit
-sanity graph --commit 8d4f78
-
-# Analyze uncommitted files in a different repository
-sanity graph --repo /path/to/repo --commit HEAD~1
-
-# Analyze specific files directly
-sanity graph --input file1.dart,file2.dart,file3.dart
-```
-
-#### `sanity languages`
-
-List supported languages and mapped file extensions for your installed Sanity version.
-
-**Example**:
-
-```bash
-sanity languages
-```
-
-#### Help
-
-- **List all commands**: `sanity --help`
-- **Command-specific help**: `sanity <command> --help`
-- **Help command alias**: `sanity help <command>`
