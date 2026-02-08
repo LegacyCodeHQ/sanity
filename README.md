@@ -83,3 +83,9 @@ Sanity uses a file-based dependency graph to visualize the impact of AI-generate
 - Rust
 - Swift
 - TypeScript
+
+## License
+
+```
+This project is licensed under the GNU Affero General Public License v3.0.
+```
