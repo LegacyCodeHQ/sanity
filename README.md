@@ -27,7 +27,7 @@ brew install LegacyCodeHQ/tap/clarity
 **Step 2:** Inside your project:
 
 ```bash
-clarity setup  # Add usage instructions to AGENTS.md for your coding agent
+clarity setup # Adds usage instructions to AGENTS.md for your coding agent
 ```
 
 More install options: [Installation Guide](docs/usage/installation.md).
@@ -55,31 +55,37 @@ More install options: [Installation Guide](docs/usage/installation.md).
 - [Audit AI-generated code](https://youtu.be/EqOwJnZSiQs)
 - Stabilize and reclaim apps built with AI
 
-## Problems
+## Manual Usage
 
-Every time a coding agent makes changes to your codebase, you have the following questions:
+If you run `clarity setup`, your coding agent will use Clarity automatically from `AGENTS.md`.
 
-- Which files should I review first and in what order?
-- Where should I spend most of my review effort?
-- What is the blast radius of this change?
-- Which parts of the change are too risky?
-- How does this solution fit into the existing system?
-- Are there adequate tests for these changes?
+If you want to use Clarity manually in your terminal, use `clarity show` commands like the examples below.
 
-These concerns worsen when there are:
+### Common Commands
 
-- Too many files to review
-- You have an outdated mental model of your codebase
+```bash
+clarity show                      # Visualize uncommitted changes
+clarity show -c HEAD              # Visualize the latest commit
+clarity show -c HEAD~3...HEAD     # Visualize a commit range
+clarity show -i src,tests         # Build graph from specific files/directories
+clarity show -w a.go,b.go         # Show all paths between files
+clarity show -f mermaid           # Mermaid output (default is dot)
+clarity show -u                   # Generate a shareable visualization URL
+clarity languages                 # List supported languages and extensions
+```
 
-## How Clarity Helps
+> Note: For quick viewing and sharing, run `clarity show -u` to generate a visualization URL directly.
 
-Clarity uses a file-based dependency graph to visualize the impact of AI-generated changes, showing you:
+### Output Options
 
-- The files changed and the relationships between them
-- The order to review files (**short answer:** review from right-to-left)
-- Color-coded files by extension to help you quickly categorize and group them for review
-- Test files at a glance
-- An accurate mental model of the system as you evolve it
+- `-f dot`: Graphviz DOT output (default)
+- `-f mermaid`: Mermaid flowchart output
+- `-u`: Generate a visualization URL for supported formats
+
+### Tips
+
+- Run `clarity show` after every non-trivial code change to review blast radius.
+- Use `clarity show -c <commit>` for clean, reproducible review snapshots.
 
 ## Clarity in Action
 
