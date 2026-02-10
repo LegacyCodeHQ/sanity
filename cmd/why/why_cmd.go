@@ -74,8 +74,8 @@ func NewCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "why <from> <to>",
-		Short: "Explain whether two files are directly connected.",
-		Long:  "Explain whether two files are immediately connected by a direct dependency edge.",
+		Short: "Show direct dependency direction(s) between two files.",
+		Long:  "Show immediate dependency edge(s) between two files, including referenced members when available.",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runWhy(cmd, opts, args[0], args[1])
