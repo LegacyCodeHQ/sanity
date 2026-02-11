@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 
+	diffcmd "github.com/LegacyCodeHQ/clarity/cmd/diff"
 	"github.com/LegacyCodeHQ/clarity/cmd/graph"
 	"github.com/LegacyCodeHQ/clarity/cmd/languages"
 	setupcmd "github.com/LegacyCodeHQ/clarity/cmd/setup"
@@ -44,6 +45,7 @@ func Execute() {
 
 func init() {
 	// Register subcommands
+	rootCmd.AddCommand(diffcmd.Cmd)
 	rootCmd.AddCommand(graph.Cmd)
 	rootCmd.AddCommand(languages.Cmd)
 	rootCmd.AddCommand(setupcmd.Cmd)
