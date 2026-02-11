@@ -61,8 +61,8 @@ func TestParseRenamedFilePath_AbbreviatedFormat(t *testing.T) {
 	}{
 		{
 			name:     "empty old path",
-			input:    "depgraph/{ => dart}/parser_dart.go",
-			expected: "depgraph/dart/parser_dart.go",
+			input:    "depgraph/{ => languages/dart}/parser_dart.go",
+			expected: "depgraph/languages/dart/parser_dart.go",
 		},
 		{
 			name:     "both old and new paths",

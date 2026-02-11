@@ -1,20 +1,20 @@
 package registry
 
 import (
-	"github.com/LegacyCodeHQ/clarity/depgraph/c"
-	"github.com/LegacyCodeHQ/clarity/depgraph/cpp"
-	"github.com/LegacyCodeHQ/clarity/depgraph/csharp"
-	"github.com/LegacyCodeHQ/clarity/depgraph/dart"
-	"github.com/LegacyCodeHQ/clarity/depgraph/golang"
-	"github.com/LegacyCodeHQ/clarity/depgraph/java"
-	"github.com/LegacyCodeHQ/clarity/depgraph/javascript"
-	"github.com/LegacyCodeHQ/clarity/depgraph/kotlin"
 	"github.com/LegacyCodeHQ/clarity/depgraph/langsupport"
-	"github.com/LegacyCodeHQ/clarity/depgraph/python"
-	"github.com/LegacyCodeHQ/clarity/depgraph/ruby"
-	"github.com/LegacyCodeHQ/clarity/depgraph/rust"
-	"github.com/LegacyCodeHQ/clarity/depgraph/swift"
-	"github.com/LegacyCodeHQ/clarity/depgraph/typescript"
+	"github.com/LegacyCodeHQ/clarity/depgraph/languages/c"
+	"github.com/LegacyCodeHQ/clarity/depgraph/languages/cpp"
+	"github.com/LegacyCodeHQ/clarity/depgraph/languages/csharp"
+	"github.com/LegacyCodeHQ/clarity/depgraph/languages/dart"
+	"github.com/LegacyCodeHQ/clarity/depgraph/languages/golang"
+	"github.com/LegacyCodeHQ/clarity/depgraph/languages/java"
+	"github.com/LegacyCodeHQ/clarity/depgraph/languages/javascript"
+	"github.com/LegacyCodeHQ/clarity/depgraph/languages/kotlin"
+	"github.com/LegacyCodeHQ/clarity/depgraph/languages/python"
+	"github.com/LegacyCodeHQ/clarity/depgraph/languages/ruby"
+	"github.com/LegacyCodeHQ/clarity/depgraph/languages/rust"
+	"github.com/LegacyCodeHQ/clarity/depgraph/languages/swift"
+	"github.com/LegacyCodeHQ/clarity/depgraph/languages/typescript"
 )
 
 var modules = []langsupport.Module{

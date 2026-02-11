@@ -178,7 +178,7 @@ func TestX(t *testing.T) {
 
 func TestWhyCommand_TextShowsMembersForParserAndTest(t *testing.T) {
 	cmd := NewCommand()
-	cmd.SetArgs([]string{"-r", "../..", "depgraph/swift/parser_swift.go", "depgraph/swift/parser_swift_test.go"})
+	cmd.SetArgs([]string{"-r", "../..", "depgraph/languages/swift/parser_swift.go", "depgraph/languages/swift/parser_swift_test.go"})
 
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
