@@ -1,10 +1,8 @@
-package dot_test
+package formatters
 
 import (
 	"testing"
 
-	"github.com/LegacyCodeHQ/clarity/cmd/graph/formatters"
-	"github.com/LegacyCodeHQ/clarity/cmd/graph/formatters/dot"
 	"github.com/LegacyCodeHQ/clarity/depgraph"
 	"github.com/LegacyCodeHQ/clarity/internal/testhelpers"
 	"github.com/LegacyCodeHQ/clarity/vcs"
@@ -28,8 +26,8 @@ func TestDependencyGraph_ToDOT(t *testing.T) {
 		"/project/utils.dart": {},
 	}, nil)
 
-	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.RenderOptions{})
+	formatter := dotFormatter{}
+	output, err := formatter.Format(graph, RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)
@@ -55,8 +53,8 @@ func TestDependencyGraph_ToDOT_NewFilesUseSeedlingLabel(t *testing.T) {
 		},
 	})
 
-	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.RenderOptions{})
+	formatter := dotFormatter{}
+	output, err := formatter.Format(graph, RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)
@@ -71,8 +69,8 @@ func TestDependencyGraph_ToDOT_TestFilesAreLightGreen(t *testing.T) {
 		"/project/utils_test.go": {"/project/utils.go"},
 	}, nil)
 
-	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.RenderOptions{})
+	formatter := dotFormatter{}
+	output, err := formatter.Format(graph, RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)
@@ -87,8 +85,8 @@ func TestDependencyGraph_ToDOT_TestFilesAreLightGreen_Dart(t *testing.T) {
 		"/project/test/utils_test.dart": {"/project/lib/utils.dart"},
 	}, nil)
 
-	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.RenderOptions{})
+	formatter := dotFormatter{}
+	output, err := formatter.Format(graph, RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)
@@ -106,8 +104,8 @@ func TestDependencyGraph_ToDOT_MajorityExtensionIsWhite(t *testing.T) {
 		"/project/utils.dart":       {},
 	}, nil)
 
-	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.RenderOptions{})
+	formatter := dotFormatter{}
+	output, err := formatter.Format(graph, RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)
@@ -124,8 +122,8 @@ func TestDependencyGraph_ToDOT_MajorityExtensionIsWhite_WithTestFiles(t *testing
 		"/project/main.dart":        {},
 	}, nil)
 
-	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.RenderOptions{})
+	formatter := dotFormatter{}
+	output, err := formatter.Format(graph, RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)
@@ -140,8 +138,8 @@ func TestDependencyGraph_ToDOT_MajorityExtensionTie(t *testing.T) {
 		"/project/utils.dart": {},
 	}, nil)
 
-	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.RenderOptions{})
+	formatter := dotFormatter{}
+	output, err := formatter.Format(graph, RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)
@@ -155,8 +153,8 @@ func TestDependencyGraph_ToDOT_SingleExtensionAllWhite(t *testing.T) {
 		"/project/output_format.go": {},
 	}, nil)
 
-	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.RenderOptions{})
+	formatter := dotFormatter{}
+	output, err := formatter.Format(graph, RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)
@@ -172,8 +170,8 @@ func TestDependencyGraph_ToDOT_TypeScriptTestFiles(t *testing.T) {
 		"/project/src/components/Button.spec.tsx": {},
 	}, nil)
 
-	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.RenderOptions{})
+	formatter := dotFormatter{}
+	output, err := formatter.Format(graph, RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)
@@ -188,8 +186,8 @@ func TestDependencyGraph_ToDOT_NodesAreDeclaredOnlyOnce(t *testing.T) {
 		"/project/config.go":     {"/project/standalone.go"},
 	}, nil)
 
-	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.RenderOptions{})
+	formatter := dotFormatter{}
+	output, err := formatter.Format(graph, RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)
@@ -204,8 +202,8 @@ func TestDependencyGraph_ToDOT_HighlightsCycles(t *testing.T) {
 		"/project/d.go": {},
 	}, nil)
 
-	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.RenderOptions{})
+	formatter := dotFormatter{}
+	output, err := formatter.Format(graph, RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)
@@ -219,8 +217,8 @@ func TestDependencyGraph_ToDOT_HighlightsAllCycleEdgesInSCC(t *testing.T) {
 		"/project/c.go": {"/project/a.go"},
 	}, nil)
 
-	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.RenderOptions{})
+	formatter := dotFormatter{}
+	output, err := formatter.Format(graph, RenderOptions{})
 	require.NoError(t, err)
 
 	require.Contains(t, output, "\"a.go\" [label=\"a.go\", style=filled, fillcolor=white, color=red];")
@@ -239,8 +237,8 @@ func TestDependencyGraph_ToDOT_DuplicateBaseNamesStayDistinct(t *testing.T) {
 		"/project/lib/utils.js":          {},
 	}, nil)
 
-	formatter := &dot.Formatter{}
-	output, err := formatter.Format(graph, formatters.RenderOptions{})
+	formatter := dotFormatter{}
+	output, err := formatter.Format(graph, RenderOptions{})
 	require.NoError(t, err)
 
 	g := testhelpers.DotGoldie(t)

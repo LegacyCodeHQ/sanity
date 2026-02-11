@@ -1,4 +1,4 @@
-package dot
+package formatters
 
 import (
 	"fmt"
@@ -7,15 +7,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/LegacyCodeHQ/clarity/cmd/graph/formatters"
 	"github.com/LegacyCodeHQ/clarity/depgraph"
 )
 
-// Formatter formats dependency graphs as Graphviz DOT.
-type Formatter struct{}
-
 // Format converts the dependency graph to Graphviz DOT format.
-func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.RenderOptions) (string, error) {
+func (f dotFormatter) Format(g depgraph.FileDependencyGraph, opts RenderOptions) (string, error) {
 	adjacency, err := depgraph.AdjacencyList(g.Graph)
 	if err != nil {
 		return "", err
@@ -68,7 +64,7 @@ func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.Rende
 		filePaths = append(filePaths, source)
 	}
 	sort.Strings(filePaths)
-	nodeNames := formatters.BuildNodeNames(filePaths)
+	nodeNames := BuildNodeNames(filePaths)
 
 	extensionColors := getExtensionColors(filePaths)
 
@@ -222,37 +218,7 @@ func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.Rende
 }
 
 // GenerateURL creates a GraphvizOnline URL with the DOT graph embedded.
-func (f *Formatter) GenerateURL(output string) (string, bool) {
+func (f dotFormatter) GenerateURL(output string) (string, bool) {
 	encoded := url.PathEscape(output)
 	return fmt.Sprintf("https://dreampuf.github.io/GraphvizOnline/?engine=dot#%s", encoded), true
-}
-
-func getExtensionColors(fileNames []string) map[string]string {
-	availableColors := []string{
-		"lightblue", "lightyellow", "mistyrose", "lightsalmon",
-		"lightpink", "lavender", "peachpuff", "plum", "powderblue", "khaki",
-		"palegoldenrod", "thistle",
-	}
-
-	uniqueExtensions := make(map[string]bool)
-	for _, fileName := range fileNames {
-		ext := filepath.Ext(fileName)
-		if ext != "" {
-			uniqueExtensions[ext] = true
-		}
-	}
-
-	sortedExtensions := make([]string, 0, len(uniqueExtensions))
-	for ext := range uniqueExtensions {
-		sortedExtensions = append(sortedExtensions, ext)
-	}
-	sort.Strings(sortedExtensions)
-
-	extensionColors := make(map[string]string)
-	for i, ext := range sortedExtensions {
-		color := availableColors[i%len(availableColors)]
-		extensionColors[ext] = color
-	}
-
-	return extensionColors
 }

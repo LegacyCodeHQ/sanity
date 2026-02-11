@@ -1,4 +1,4 @@
-package mermaid
+package formatters
 
 import (
 	"encoding/base64"
@@ -9,15 +9,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/LegacyCodeHQ/clarity/cmd/graph/formatters"
 	"github.com/LegacyCodeHQ/clarity/depgraph"
 )
 
-// Formatter formats dependency graphs as Mermaid.js flowcharts.
-type Formatter struct{}
-
 // Format converts the dependency graph to Mermaid.js flowchart format.
-func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.RenderOptions) (string, error) {
+func (f mermaidFormatter) Format(g depgraph.FileDependencyGraph, opts RenderOptions) (string, error) {
 	adjacency, err := depgraph.AdjacencyList(g.Graph)
 	if err != nil {
 		return "", err
@@ -64,7 +60,7 @@ func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.Rende
 		filePaths = append(filePaths, source)
 	}
 	sort.Strings(filePaths)
-	nodeNames := formatters.BuildNodeNames(filePaths)
+	nodeNames := BuildNodeNames(filePaths)
 
 	// Create a mapping from node keys to valid Mermaid node IDs.
 	// Mermaid node IDs can't have dots or special characters.
@@ -249,7 +245,7 @@ func (f *Formatter) Format(g depgraph.FileDependencyGraph, opts formatters.Rende
 }
 
 // GenerateURL creates a mermaid.live URL with the diagram embedded.
-func (f *Formatter) GenerateURL(output string) (string, bool) {
+func (f mermaidFormatter) GenerateURL(output string) (string, bool) {
 	payload := map[string]interface{}{
 		"code": output,
 		"mermaid": map[string]interface{}{

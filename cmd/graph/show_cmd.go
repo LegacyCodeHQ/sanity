@@ -8,8 +8,6 @@ import (
 	"strings"
 
 	"github.com/LegacyCodeHQ/clarity/cmd/graph/formatters"
-	"github.com/LegacyCodeHQ/clarity/cmd/graph/formatters/dot"
-	"github.com/LegacyCodeHQ/clarity/cmd/graph/formatters/mermaid"
 	"github.com/LegacyCodeHQ/clarity/depgraph"
 	"github.com/LegacyCodeHQ/clarity/depgraph/registry"
 	"github.com/LegacyCodeHQ/clarity/vcs"
@@ -165,14 +163,9 @@ func runGraph(cmd *cobra.Command, opts *graphOptions) error {
 		return fmt.Errorf("failed to build file graph metadata: %w", err)
 	}
 
-	var formatter formatters.Formatter
-	switch format {
-	case formatters.OutputFormatDOT:
-		formatter = &dot.Formatter{}
-	case formatters.OutputFormatMermaid:
-		formatter = &mermaid.Formatter{}
-	default:
-		return fmt.Errorf("unknown format: %s (valid options: %s)", opts.outputFormat, formatters.SupportedFormats())
+	formatter, err := formatters.NewFormatter(opts.outputFormat)
+	if err != nil {
+		return err
 	}
 
 	renderOpts := formatters.RenderOptions{

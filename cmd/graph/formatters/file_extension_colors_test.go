@@ -1,4 +1,4 @@
-package dot
+package formatters
 
 import (
 	"path/filepath"
