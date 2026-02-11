@@ -26,6 +26,7 @@ type graphOptions struct {
 	excludeExt   string
 	excludeExts  []string
 	includes     []string
+	excludes     []string
 	betweenFiles []string
 	targetFile   string
 	depthLevel   int
@@ -48,7 +49,8 @@ func NewCommand() *cobra.Command {
 		Long:    `Show a scoped file-based dependency graph.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if cmd.CalledAs() == "graph" {
-				fmt.Fprintln(cmd.ErrOrStderr(), "Warning: `clarity graph` is deprecated and will be removed in a future release. Use `clarity show`.\n")
+				fmt.Fprintln(cmd.ErrOrStderr(), "Warning: `clarity graph` is deprecated and will be removed in a future release. Use `clarity show`.")
+				fmt.Fprintln(cmd.ErrOrStderr())
 			}
 			return runGraph(cmd, opts)
 		},
@@ -71,6 +73,8 @@ func NewCommand() *cobra.Command {
 	cmd.Flags().BoolVarP(&opts.generateURL, "url", "u", false, "Generate visualization URL (supported formats: dot, mermaid)")
 	// Add input flag for explicit files/directories
 	cmd.Flags().StringSliceVarP(&opts.includes, "input", "i", nil, "Build graph from specific files and/or directories (comma-separated)")
+	// Add exclude flag for removing explicit files/directories from graph inputs
+	cmd.Flags().StringSliceVar(&opts.excludes, "exclude", nil, "Exclude specific files and/or directories from graph inputs (comma-separated)")
 	// Add extension inclusion flag
 	cmd.Flags().StringVar(&opts.includeExt, "include-ext", "", "Include only files with these extensions (comma-separated, e.g. .go,.java)")
 	// Add extension exclusion flag
@@ -108,6 +112,11 @@ func runGraph(cmd *cobra.Command, opts *graphOptions) error {
 	}
 	if done {
 		return nil
+	}
+
+	filePaths, err = applyExcludePathFilter(opts, pathResolver, filePaths)
+	if err != nil {
+		return err
 	}
 
 	filePaths, err = applyIncludeExtensionFilter(opts, filePaths)
@@ -571,6 +580,49 @@ func applyExcludeExtensionFilter(opts *graphOptions, filePaths []string) ([]stri
 	}
 
 	return filtered, nil
+}
+
+func applyExcludePathFilter(opts *graphOptions, pathResolver PathResolver, filePaths []string) ([]string, error) {
+	if len(opts.excludes) == 0 {
+		return filePaths, nil
+	}
+
+	excludedPaths := make([]string, 0, len(opts.excludes))
+	for _, exclude := range opts.excludes {
+		resolvedExclude, err := pathResolver.Resolve(RawPath(exclude))
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve exclude path %q: %w", exclude, err)
+		}
+		excludedPaths = append(excludedPaths, resolveSymlinks(filepath.Clean(resolvedExclude.String())))
+	}
+
+	filtered := make([]string, 0, len(filePaths))
+	for _, filePath := range filePaths {
+		cleanPath := resolveSymlinks(filepath.Clean(filePath))
+		if isPathExcluded(cleanPath, excludedPaths) {
+			continue
+		}
+		filtered = append(filtered, filePath)
+	}
+
+	if len(filtered) == 0 {
+		return nil, fmt.Errorf("no files remain after applying --exclude %q", strings.Join(opts.excludes, ","))
+	}
+
+	return filtered, nil
+}
+
+func isPathExcluded(filePath string, excludedPaths []string) bool {
+	for _, excludedPath := range excludedPaths {
+		if filePath == excludedPath {
+			return true
+		}
+		if strings.HasPrefix(filePath, excludedPath+string(filepath.Separator)) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // expandPaths expands file paths and directories into individual file paths.

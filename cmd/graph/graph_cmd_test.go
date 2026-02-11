@@ -145,6 +145,105 @@ func TestGraphInput_WithSupportedFiles_RendersNode(t *testing.T) {
 	}
 }
 
+func TestGraphInput_Exclude_RemovesSpecificFile(t *testing.T) {
+	repoDir := t.TempDir()
+	goFile := filepath.Join(repoDir, "main.go")
+	javaFile := filepath.Join(repoDir, "Helper.java")
+
+	if err := os.WriteFile(goFile, []byte("package main\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(javaFile, []byte("public class Helper {}\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	cmd := NewCommand()
+	cmd.SetArgs([]string{
+		"-r", repoDir,
+		"-i", repoDir,
+		"-f", "dot",
+		"--exclude", "Helper.java",
+	})
+
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("cmd.Execute() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, `"main.go"`) {
+		t.Fatalf("expected graph output to include main.go node, got:\n%s", output)
+	}
+	if strings.Contains(output, `"Helper.java"`) {
+		t.Fatalf("expected graph output to exclude Helper.java node, got:\n%s", output)
+	}
+}
+
+func TestGraphInput_Exclude_RemovesDirectory(t *testing.T) {
+	repoDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repoDir, "internal"), 0o755); err != nil {
+		t.Fatalf("os.MkdirAll() error = %v", err)
+	}
+	goFile := filepath.Join(repoDir, "main.go")
+	internalFile := filepath.Join(repoDir, "internal", "helper.go")
+
+	if err := os.WriteFile(goFile, []byte("package main\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(internalFile, []byte("package internal\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	cmd := NewCommand()
+	cmd.SetArgs([]string{
+		"-r", repoDir,
+		"-i", repoDir,
+		"-f", "dot",
+		"--exclude", "internal",
+	})
+
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("cmd.Execute() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, `"main.go"`) {
+		t.Fatalf("expected graph output to include main.go node, got:\n%s", output)
+	}
+	if strings.Contains(output, `"helper.go"`) {
+		t.Fatalf("expected graph output to exclude helper.go node, got:\n%s", output)
+	}
+}
+
+func TestGraphInput_Exclude_AllFiles_ReturnsError(t *testing.T) {
+	repoDir := t.TempDir()
+	goFile := filepath.Join(repoDir, "main.go")
+	if err := os.WriteFile(goFile, []byte("package main\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	cmd := NewCommand()
+	cmd.SetArgs([]string{
+		"-r", repoDir,
+		"-i", repoDir,
+		"-f", "dot",
+		"--exclude", repoDir,
+	})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected error when --exclude removes all files")
+	}
+	if !strings.Contains(err.Error(), "no files remain after applying --exclude") {
+		t.Fatalf("expected exclude error, got: %v", err)
+	}
+}
+
 func TestGraphInput_IncludeExt_KeepsOnlyMatchingExtension(t *testing.T) {
 	repoDir := t.TempDir()
 	goFile := filepath.Join(repoDir, "main.go")
