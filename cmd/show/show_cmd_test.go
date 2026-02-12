@@ -53,6 +53,41 @@ public class App {}
 	}
 }
 
+func TestGraphInput_WithMJSFiles_RendersDependencyEdges(t *testing.T) {
+	repoDir := t.TempDir()
+	testFile := filepath.Join(repoDir, "viewer_state.test.mjs")
+	stateFile := filepath.Join(repoDir, "viewer_state.mjs")
+
+	testContent := `import {
+  getViewModel,
+} from "./viewer_state.mjs";
+`
+	if err := os.WriteFile(testFile, []byte(testContent), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(stateFile, []byte("export function getViewModel() {}\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	cmd := NewCommand()
+	cmd.SetArgs([]string{"-i", testFile + "," + stateFile, "-f", "dot", "--allow-outside-repo"})
+
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("cmd.Execute() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, `"viewer_state.test.mjs"`) || !strings.Contains(output, `"viewer_state.mjs"`) {
+		t.Fatalf("expected graph output to include mjs nodes, got:\n%s", output)
+	}
+	if !strings.Contains(output, `"viewer_state.test.mjs" -> "viewer_state.mjs"`) {
+		t.Fatalf("expected mjs import edge viewer_state.test.mjs -> viewer_state.mjs, got:\n%s", output)
+	}
+}
+
 func TestGraphAlias_PrintsDeprecationWarning(t *testing.T) {
 	repoDir := t.TempDir()
 	supportedFile := filepath.Join(repoDir, "main.go")

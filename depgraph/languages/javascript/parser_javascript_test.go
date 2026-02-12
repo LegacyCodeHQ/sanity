@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/LegacyCodeHQ/clarity/vcs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -153,6 +154,30 @@ func TestResolveJavaScriptImportPath_CJS(t *testing.T) {
 
 	resolved = ResolveJavaScriptImportPath(sourceFile, "./legacy", suppliedFiles)
 	assert.Contains(t, resolved, "/project/src/legacy/index.cjs")
+}
+
+func TestJavaScriptImports_RealMJSFile(t *testing.T) {
+	filePath := filepath.Join("..", "..", "..", "cmd", "watch", "viewer_state.test.mjs")
+	imports, err := JavaScriptImports(filePath)
+	require.NoError(t, err)
+
+	paths := extractPaths(imports)
+	assert.Contains(t, paths, "./viewer_state.mjs")
+}
+
+func TestResolveJavaScriptProjectImports_RealMJSFile(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	testFile, err := filepath.Abs(filepath.Join(root, "cmd", "watch", "viewer_state.test.mjs"))
+	require.NoError(t, err)
+	stateFile, err := filepath.Abs(filepath.Join(root, "cmd", "watch", "viewer_state.mjs"))
+	require.NoError(t, err)
+
+	resolved, err := ResolveJavaScriptProjectImports(testFile, testFile, ".mjs", map[string]bool{
+		testFile:  true,
+		stateFile: true,
+	}, vcs.FilesystemContentReader())
+	require.NoError(t, err)
+	assert.Contains(t, resolved, stateFile)
 }
 
 // Helper functions

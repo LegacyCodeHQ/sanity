@@ -1194,3 +1194,19 @@ func main() {
 	assert.Contains(t, mainDeps, configPath, "main.go should depend on config.json")
 	assert.Contains(t, mainDeps, indexPath, "main.go should depend on index.html")
 }
+
+func TestBuildDependencyGraph_RealMJSImports(t *testing.T) {
+	testFile := filepath.Join("..", "cmd", "watch", "viewer_state.test.mjs")
+	stateFile := filepath.Join("..", "cmd", "watch", "viewer_state.mjs")
+
+	graph, err := depgraph.BuildDependencyGraph([]string{testFile, stateFile}, vcs.FilesystemContentReader())
+	require.NoError(t, err)
+
+	adj := mustAdjacency(t, graph)
+	absTest, err := filepath.Abs(testFile)
+	require.NoError(t, err)
+	absState, err := filepath.Abs(stateFile)
+	require.NoError(t, err)
+
+	assert.Contains(t, adj[absTest], absState)
+}
