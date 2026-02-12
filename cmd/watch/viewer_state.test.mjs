@@ -172,4 +172,3 @@ test("formatSnapshotMeta renders snapshot position, id, and time", () => {
   const result = formatSnapshotMeta(snapshot(99), 1, 3, () => "11:11:11");
   assert.equal(result, "#2/3 | id 99 | 11:11:11");
 });
-

@@ -206,4 +206,3 @@ export function getViewModel(state, timeFormatter = formatTime) {
     },
   };
 }
-

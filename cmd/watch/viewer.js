@@ -1,4 +1,5 @@
 import { Graphviz } from "https://cdn.jsdelivr.net/npm/@hpcc-js/wasm-graphviz@1.6.1/dist/index.js";
+import { normalizeGraphStreamPayload } from "./viewer_protocol.mjs";
 import {
   applyLiveSelection,
   applySliderInput,
@@ -91,7 +92,7 @@ function connectSSE() {
 
   source.addEventListener("graph", function(event) {
     try {
-      const payload = JSON.parse(event.data);
+      const payload = normalizeGraphStreamPayload(JSON.parse(event.data));
       state = mergePayload(state, payload);
       renderSelection();
     } catch (err) {

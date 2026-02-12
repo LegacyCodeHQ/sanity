@@ -11,25 +11,6 @@ import (
 
 const maxSnapshots = 250
 
-type graphSnapshot struct {
-	ID        int64     `json:"id"`
-	Timestamp time.Time `json:"timestamp"`
-	DOT       string    `json:"dot"`
-}
-
-type graphStreamPayload struct {
-	WorkingSnapshots       []graphSnapshot      `json:"workingSnapshots"`
-	PastCollections        []snapshotCollection `json:"pastCollections"`
-	LatestWorkingID        int64                `json:"latestWorkingId"`
-	LatestPastCollectionID int64                `json:"latestPastCollectionId"`
-}
-
-type snapshotCollection struct {
-	ID        int64           `json:"id"`
-	Timestamp time.Time       `json:"timestamp"`
-	Snapshots []graphSnapshot `json:"snapshots"`
-}
-
 // broker manages SSE client connections and broadcasts graph snapshots.
 type broker struct {
 	mu             sync.Mutex
@@ -200,9 +181,11 @@ func pushLatestPayload(ch chan graphStreamPayload, payload graphStreamPayload) {
 
 func newServer(b *broker, port int) *http.Server {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", handleIndex)
-	mux.HandleFunc("/viewer.js", handleViewerJS)
-	mux.HandleFunc("/events", handleSSE(b))
+	mux.HandleFunc(routeIndex, handleIndex)
+	mux.HandleFunc(routeViewerJS, handleViewerJS)
+	mux.HandleFunc(routeViewerStateJS, handleViewerStateJS)
+	mux.HandleFunc(routeViewerProtoJS, handleViewerProtocolJS)
+	mux.HandleFunc(routeEvents, handleSSE(b))
 
 	return &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
@@ -220,6 +203,20 @@ func handleIndex(w http.ResponseWriter, _ *http.Request) {
 func handleViewerJS(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 	if _, err := w.Write([]byte(viewerJS)); err != nil {
+		http.Error(w, "failed to render script", http.StatusInternalServerError)
+	}
+}
+
+func handleViewerStateJS(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	if _, err := w.Write([]byte(viewerStateJS)); err != nil {
+		http.Error(w, "failed to render script", http.StatusInternalServerError)
+	}
+}
+
+func handleViewerProtocolJS(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	if _, err := w.Write([]byte(viewerProtocolJS)); err != nil {
 		http.Error(w, "failed to render script", http.StatusInternalServerError)
 	}
 }
@@ -252,7 +249,7 @@ func handleSSE(b *broker) http.HandlerFunc {
 				if err != nil {
 					continue
 				}
-				fmt.Fprintf(w, "event: graph\n")
+				fmt.Fprintf(w, "event: %s\n", sseEventGraph)
 				for _, line := range strings.Split(string(body), "\n") {
 					fmt.Fprintf(w, "data: %s\n", line)
 				}

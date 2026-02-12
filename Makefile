@@ -67,7 +67,7 @@ test:
 	$(MAKE) test-js
 
 test-js:
-	node --test cmd/watch/viewer_state.test.mjs
+	node --test cmd/watch/viewer_state.test.mjs cmd/watch/viewer_protocol.test.mjs
 
 # Update golden test fixtures (only packages using goldie)
 test-update-golden:
