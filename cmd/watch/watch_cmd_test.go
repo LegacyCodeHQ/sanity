@@ -158,6 +158,42 @@ func TestBroker_PublishSkipsDuplicateSnapshots(t *testing.T) {
 	}
 }
 
+func TestBroker_ResetClearsActiveSnapshots(t *testing.T) {
+	b := newBroker()
+	ch := b.subscribe()
+	defer b.unsubscribe(ch)
+
+	b.publish("digraph { A; }")
+	<-ch
+
+	b.reset()
+
+	select {
+	case got := <-ch:
+		assert.Empty(t, got.Snapshots)
+		assert.Zero(t, got.LatestID)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for reset payload")
+	}
+}
+
+func TestBroker_NewSubscriberReceivesResetState(t *testing.T) {
+	b := newBroker()
+	b.publish("digraph { A; }")
+	b.reset()
+
+	ch := b.subscribe()
+	defer b.unsubscribe(ch)
+
+	select {
+	case got := <-ch:
+		assert.Empty(t, got.Snapshots)
+		assert.Zero(t, got.LatestID)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for reset payload")
+	}
+}
+
 func TestHandleSSE_StreamsJSONPayload(t *testing.T) {
 	b := newBroker()
 	b.publish("digraph { A; }")
@@ -337,7 +373,7 @@ func TestBuildDOTGraph_IncludesFileStats(t *testing.T) {
 	assert.Contains(t, dot, "main.go")
 }
 
-func TestPublishCurrentGraph_NoUncommittedChangesPublishesEmptyGraph(t *testing.T) {
+func TestPublishCurrentGraph_NoUncommittedChangesResetsSnapshots(t *testing.T) {
 	dir := t.TempDir()
 	initGitRepo(t, dir)
 
@@ -349,11 +385,10 @@ func TestPublishCurrentGraph_NoUncommittedChangesPublishesEmptyGraph(t *testing.
 
 	select {
 	case got := <-ch:
-		require.Len(t, got.Snapshots, 1)
-		assert.Equal(t, emptyDOTGraph, got.Snapshots[0].DOT)
-		assert.Equal(t, got.Snapshots[0].ID, got.LatestID)
+		assert.Empty(t, got.Snapshots)
+		assert.Zero(t, got.LatestID)
 	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for empty graph publish")
+		t.Fatal("timed out waiting for reset publish")
 	}
 }
 

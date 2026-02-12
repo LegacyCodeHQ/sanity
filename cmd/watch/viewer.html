@@ -132,6 +132,10 @@
       }
     }
 
+    function renderWaitingState() {
+      container.innerHTML = '<p id="placeholder">No uncommitted changes. Waiting for file changes...</p>';
+    }
+
     function formatSnapshotMeta(snapshot, index) {
       const time = new Date(snapshot.timestamp);
       return `#${index + 1} ${time.toLocaleTimeString()}`;
@@ -141,6 +145,9 @@
       const total = snapshots.length;
       sliderEl.disabled = total <= 1;
       sliderEl.max = total > 0 ? String(total - 1) : "0";
+      if (total === 0) {
+        sliderEl.value = "0";
+      }
 
       if (!manualMode && total > 0) {
         sliderEl.value = String(total - 1);
@@ -161,6 +168,8 @@
 
     function renderSelectedSnapshot() {
       if (snapshots.length === 0) {
+        syncTimelineUI();
+        renderWaitingState();
         return;
       }
       const idx = manualMode ? Number(sliderEl.value || "0") : snapshots.length - 1;
@@ -174,6 +183,11 @@
 
     function mergePayload(payload) {
       snapshots = payload.snapshots || [];
+      if (snapshots.length === 0) {
+        manualMode = false;
+        renderSelectedSnapshot();
+        return;
+      }
 
       if (!manualMode) {
         renderSelectedSnapshot();

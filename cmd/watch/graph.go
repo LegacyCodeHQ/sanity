@@ -59,16 +59,6 @@ func buildDOTGraph(repoPath string, opts *watchOptions) (string, error) {
 
 var errNoUncommittedChanges = fmt.Errorf("no uncommitted changes")
 
-const emptyDOTGraph = `digraph dependencies {
-  rankdir=LR;
-  node [shape=box];
-  label="no uncommitted changes";
-  labelloc=t;
-  labeljust=l;
-  fontsize=10;
-  fontname=Courier;
-}`
-
 func applyWatchExtensionFilters(opts *watchOptions, filePaths []string) ([]string, error) {
 	if opts.includeExt != "" {
 		exts := parseExtensions(opts.includeExt)

@@ -24,10 +24,12 @@ type graphStreamPayload struct {
 
 // broker manages SSE client connections and broadcasts graph snapshots.
 type broker struct {
-	mu      sync.Mutex
-	clients map[chan graphStreamPayload]struct{}
-	history []graphSnapshot
-	nextID  int64
+	mu             sync.Mutex
+	clients        map[chan graphStreamPayload]struct{}
+	history        []graphSnapshot
+	archivedCycles [][]graphSnapshot
+	nextID         int64
+	hasState       bool
 }
 
 func newBroker() *broker {
@@ -71,6 +73,7 @@ func (b *broker) publish(dot string) {
 	if len(b.history) > maxSnapshots {
 		b.history = b.history[len(b.history)-maxSnapshots:]
 	}
+	b.hasState = true
 
 	payload, _ := b.currentPayloadLocked()
 	for ch := range b.clients {
@@ -82,8 +85,42 @@ func (b *broker) publish(dot string) {
 	b.mu.Unlock()
 }
 
+func (b *broker) reset() {
+	b.mu.Lock()
+	if len(b.history) > 0 {
+		archived := make([]graphSnapshot, len(b.history))
+		copy(archived, b.history)
+		b.archivedCycles = append(b.archivedCycles, archived)
+	}
+
+	if len(b.history) == 0 && b.hasState {
+		b.mu.Unlock()
+		return
+	}
+
+	b.history = nil
+	b.hasState = true
+	payload := graphStreamPayload{
+		Snapshots: []graphSnapshot{},
+		LatestID:  0,
+	}
+	for ch := range b.clients {
+		select {
+		case ch <- payload:
+		default:
+		}
+	}
+	b.mu.Unlock()
+}
+
 func (b *broker) currentPayloadLocked() (graphStreamPayload, bool) {
 	if len(b.history) == 0 {
+		if b.hasState {
+			return graphStreamPayload{
+				Snapshots: []graphSnapshot{},
+				LatestID:  0,
+			}, true
+		}
 		return graphStreamPayload{}, false
 	}
 

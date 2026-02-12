@@ -99,7 +99,7 @@ func watchAndRebuild(ctx context.Context, repoPath string, opts *watchOptions, b
 func publishCurrentGraph(repoPath string, opts *watchOptions, b *broker) {
 	dot, err := buildDOTGraph(repoPath, opts)
 	if errors.Is(err, errNoUncommittedChanges) {
-		b.publish(emptyDOTGraph)
+		b.reset()
 		return
 	}
 	if err != nil {
