@@ -13,7 +13,7 @@ const sourceEl = document.getElementById("snapshot-source");
 let workingSnapshots = [];
 let pastSnapshots = [];
 let manualMode = false;
-let snapshotSource = "working";
+let selectedSnapshotID = null;
 
 function renderGraph(dot) {
   try {
@@ -28,11 +28,7 @@ function renderGraph(dot) {
 }
 
 function renderWaitingState() {
-  if (snapshotSource === "past") {
-    container.innerHTML = '<p id="placeholder">No past snapshots yet. Commit or clear working changes to archive snapshots.</p>';
-    return;
-  }
-  container.innerHTML = '<p id="placeholder">No uncommitted changes. Waiting for file changes...</p>';
+  container.innerHTML = '<p id="placeholder">No snapshots yet. Make file changes to build the session timeline.</p>';
 }
 
 function formatSnapshotMeta(snapshot, index, total) {
@@ -40,110 +36,139 @@ function formatSnapshotMeta(snapshot, index, total) {
   return `#${index + 1}/${total} | id ${snapshot.id} | ${time.toLocaleTimeString()}`;
 }
 
-function getSelectedSnapshots() {
-  return snapshotSource === "past" ? pastSnapshots : workingSnapshots;
+function getAllSessionSnapshots() {
+  return [...pastSnapshots, ...workingSnapshots];
 }
 
-function syncTimelineUI(selectedSnapshots) {
-  const total = selectedSnapshots.length;
+function getHistoricalSnapshots(allSnapshots) {
+  if (workingSnapshots.length === 0) {
+    return allSnapshots;
+  }
+  const latestWorking = workingSnapshots[workingSnapshots.length - 1];
+  return allSnapshots.filter((snapshot) => snapshot.id !== latestWorking.id);
+}
+
+function syncSnapshotSelector(allSnapshots, selectedSnapshot) {
+  const selectedValue = selectedSnapshot ? `snapshot:${selectedSnapshot.id}` : "live";
+  sourceEl.innerHTML = "";
+
+  const liveOption = document.createElement("option");
+  liveOption.value = "live";
+  liveOption.textContent = "Live view";
+  sourceEl.appendChild(liveOption);
+
+  const historical = getHistoricalSnapshots(allSnapshots);
+  historical.forEach((snapshot) => {
+    const option = document.createElement("option");
+    option.value = `snapshot:${snapshot.id}`;
+    const time = new Date(snapshot.timestamp).toLocaleTimeString();
+    option.textContent = `Snapshot ${snapshot.id} (${time})`;
+    sourceEl.appendChild(option);
+  });
+
+  sourceEl.value = sourceEl.querySelector(`option[value="${selectedValue}"]`) ? selectedValue : "live";
+}
+
+function syncTimelineUI(allSnapshots, selectedIndex) {
+  const total = allSnapshots.length;
   sliderEl.disabled = total <= 1;
   sliderEl.max = total > 0 ? String(total - 1) : "0";
   if (total === 0) {
     sliderEl.value = "0";
+  } else {
+    sliderEl.value = String(selectedIndex);
   }
 
-  if (!manualMode && total > 0) {
-    sliderEl.value = String(total - 1);
-  }
-
-  const selected = Number(sliderEl.value || "0");
-  const snapshot = selectedSnapshots[selected];
-  const modeText = manualMode
-    ? (snapshotSource === "past" ? "Past snapshot" : "Working snapshot")
-    : (snapshotSource === "past" ? "Past commits (latest)" : "Working directory (live)");
-  modeEl.textContent = modeText;
+  const snapshot = allSnapshots[selectedIndex];
+  modeEl.textContent = manualMode ? "Session snapshot" : "Live view";
   liveBtnEl.disabled = !manualMode || total === 0;
-  sourceEl.value = snapshotSource;
-
-  const canInspectPast = pastSnapshots.length > 0;
-  sourceEl.querySelector('option[value="past"]').disabled = !canInspectPast;
+  syncSnapshotSelector(allSnapshots, manualMode ? snapshot : null);
 
   if (snapshot) {
-    metaEl.textContent = `${total} snapshots | ${formatSnapshotMeta(snapshot, selected, total)}`;
+    metaEl.textContent = `${total} snapshots | ${formatSnapshotMeta(snapshot, selectedIndex, total)}`;
   } else {
-    metaEl.textContent = snapshotSource === "past" ? "0 past snapshots" : "0 working snapshots";
+    metaEl.textContent = "0 snapshots";
   }
 }
 
 function renderSelectedSnapshot() {
-  const selectedSnapshots = getSelectedSnapshots();
-  if (selectedSnapshots.length === 0) {
-    syncTimelineUI(selectedSnapshots);
+  const allSnapshots = getAllSessionSnapshots();
+  if (allSnapshots.length === 0) {
+    selectedSnapshotID = null;
+    manualMode = false;
+    syncTimelineUI(allSnapshots, 0);
     renderWaitingState();
     return;
   }
-  const idx = manualMode ? Number(sliderEl.value || "0") : selectedSnapshots.length - 1;
-  const snapshot = selectedSnapshots[idx];
+
+  let idx = allSnapshots.length - 1;
+  if (manualMode && selectedSnapshotID !== null) {
+    const selectedIdx = allSnapshots.findIndex((snapshot) => snapshot.id === selectedSnapshotID);
+    if (selectedIdx >= 0) {
+      idx = selectedIdx;
+    } else {
+      manualMode = false;
+      selectedSnapshotID = null;
+    }
+  }
+
+  const snapshot = allSnapshots[idx];
   if (!snapshot) {
     return;
   }
   renderGraph(snapshot.dot);
-  syncTimelineUI(selectedSnapshots);
+  syncTimelineUI(allSnapshots, idx);
 }
 
 function mergePayload(payload) {
   workingSnapshots = payload.workingSnapshots || [];
   pastSnapshots = payload.pastSnapshots || [];
-
-  if (snapshotSource === "past" && pastSnapshots.length === 0) {
-    snapshotSource = "working";
-    manualMode = false;
-  }
-
-  const selectedSnapshots = getSelectedSnapshots();
-  if (selectedSnapshots.length === 0) {
-    if (snapshotSource === "working") {
-      manualMode = false;
-    }
-    renderSelectedSnapshot();
-    return;
-  }
-
-  if (!manualMode) {
-    renderSelectedSnapshot();
-    return;
-  }
-
-  const maxIdx = Math.max(selectedSnapshots.length - 1, 0);
-  sliderEl.value = String(Math.min(Number(sliderEl.value || "0"), maxIdx));
   renderSelectedSnapshot();
 }
 
 sliderEl.addEventListener("input", function() {
-  if (getSelectedSnapshots().length === 0) {
+  const allSnapshots = getAllSessionSnapshots();
+  if (allSnapshots.length === 0) {
     return;
   }
+  const idx = Math.min(Number(sliderEl.value || "0"), allSnapshots.length - 1);
+  selectedSnapshotID = allSnapshots[idx].id;
   manualMode = true;
   renderSelectedSnapshot();
 });
 
 liveBtnEl.addEventListener("click", function() {
   manualMode = false;
+  selectedSnapshotID = null;
   renderSelectedSnapshot();
 });
 
 sourceEl.addEventListener("change", function(event) {
-  const selected = event.target.value === "past" ? "past" : "working";
-  if (selected === "past" && pastSnapshots.length === 0) {
-    snapshotSource = "working";
-    sourceEl.value = "working";
+  const selected = event.target.value;
+  if (selected === "live") {
     manualMode = false;
+    selectedSnapshotID = null;
     renderSelectedSnapshot();
     return;
   }
 
-  snapshotSource = selected;
-  manualMode = false;
+  if (!selected.startsWith("snapshot:")) {
+    manualMode = false;
+    selectedSnapshotID = null;
+    renderSelectedSnapshot();
+    return;
+  }
+
+  const id = Number(selected.split(":")[1]);
+  if (!Number.isFinite(id)) {
+    manualMode = false;
+    selectedSnapshotID = null;
+    renderSelectedSnapshot();
+    return;
+  }
+
+  manualMode = true;
+  selectedSnapshotID = id;
   renderSelectedSnapshot();
 });
 
