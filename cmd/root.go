@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"strconv"
 
 	diffcmd "github.com/LegacyCodeHQ/clarity/cmd/diff"
 	"github.com/LegacyCodeHQ/clarity/cmd/languages"
@@ -19,6 +20,9 @@ var buildDate = "unknown"
 
 // commit is set via build-time ldflags
 var commit = "unknown"
+
+// enableDevCommands is set via build-time ldflags
+var enableDevCommands = "false"
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -45,11 +49,13 @@ func Execute() {
 
 func init() {
 	// Register subcommands
-	rootCmd.AddCommand(diffcmd.Cmd)
 	rootCmd.AddCommand(show.Cmd)
 	rootCmd.AddCommand(languages.Cmd)
 	rootCmd.AddCommand(setupcmd.Cmd)
-	rootCmd.AddCommand(whycmd.Cmd)
+	if isDevelopmentBuild(enableDevCommands) {
+		rootCmd.AddCommand(diffcmd.Cmd)
+		rootCmd.AddCommand(whycmd.Cmd)
+	}
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 
 	// Global flags inherited by all subcommands.
@@ -71,4 +77,13 @@ func init() {
 Build date: {{printf "%s" (index .Annotations "buildDate")}}
 Commit: {{printf "%s" (index .Annotations "commit")}}
 `)
+}
+
+func isDevelopmentBuild(devCommandsFlag string) bool {
+	devCommandsEnabled, err := strconv.ParseBool(devCommandsFlag)
+	if err != nil {
+		return false
+	}
+
+	return devCommandsEnabled
 }
