@@ -267,3 +267,21 @@ func TestBuildDOTGraph_IncludesFileStats(t *testing.T) {
 
 	assert.Contains(t, dot, "main.go")
 }
+
+func TestPublishCurrentGraph_NoUncommittedChangesPublishesEmptyGraph(t *testing.T) {
+	dir := t.TempDir()
+	initGitRepo(t, dir)
+
+	b := newBroker()
+	ch := b.subscribe()
+	defer b.unsubscribe(ch)
+
+	publishCurrentGraph(dir, &watchOptions{}, b)
+
+	select {
+	case got := <-ch:
+		assert.Equal(t, emptyDOTGraph, got)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for empty graph publish")
+	}
+}

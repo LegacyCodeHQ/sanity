@@ -63,7 +63,9 @@ func newServer(b *broker, port int) *http.Server {
 
 func handleIndex(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(indexHTML))
+	if _, err := w.Write([]byte(indexHTML)); err != nil {
+		http.Error(w, "failed to render page", http.StatusInternalServerError)
+	}
 }
 
 func handleSSE(b *broker) http.HandlerFunc {

@@ -9,20 +9,22 @@ import (
 	"time"
 
 	"github.com/LegacyCodeHQ/clarity/depgraph/registry"
+	"github.com/LegacyCodeHQ/clarity/vcs/git"
 	"github.com/fsnotify/fsnotify"
 )
 
 const debounceInterval = 300 * time.Millisecond
+const gitStatePollInterval = 500 * time.Millisecond
 
 var skippedDirs = map[string]bool{
-	".git":        true,
+	".git":         true,
 	"node_modules": true,
-	".dart_tool":  true,
-	"build":       true,
+	".dart_tool":   true,
+	"build":        true,
 	"__pycache__":  true,
-	".gradle":     true,
-	".idea":       true,
-	".vscode":     true,
+	".gradle":      true,
+	".idea":        true,
+	".vscode":      true,
 }
 
 func watchAndRebuild(ctx context.Context, repoPath string, opts *watchOptions, b *broker) error {
@@ -37,6 +39,12 @@ func watchAndRebuild(ctx context.Context, repoPath string, opts *watchOptions, b
 	}
 
 	var debounceTimer *time.Timer
+	lastGitStateSig, err := git.GetRepositoryStateSignature(repoPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "git state read error: %v\n", err)
+	}
+	gitStateTicker := time.NewTicker(gitStatePollInterval)
+	defer gitStateTicker.Stop()
 
 	for {
 		select {
@@ -59,16 +67,7 @@ func watchAndRebuild(ctx context.Context, repoPath string, opts *watchOptions, b
 				debounceTimer.Stop()
 			}
 			debounceTimer = time.AfterFunc(debounceInterval, func() {
-				dot, err := buildDOTGraph(repoPath, opts)
-				if errors.Is(err, errNoUncommittedChanges) {
-					b.publish(emptyDOTGraph)
-					return
-				}
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "graph rebuild error: %v\n", err)
-					return
-				}
-				b.publish(dot)
+				publishCurrentGraph(repoPath, opts, b)
 			})
 
 			if event.Has(fsnotify.Create) {
@@ -80,8 +79,34 @@ func watchAndRebuild(ctx context.Context, repoPath string, opts *watchOptions, b
 				return nil
 			}
 			fmt.Fprintf(os.Stderr, "watcher error: %v\n", err)
+
+		case <-gitStateTicker.C:
+			stateSig, err := git.GetRepositoryStateSignature(repoPath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "git state read error: %v\n", err)
+				continue
+			}
+			if stateSig == lastGitStateSig {
+				continue
+			}
+
+			lastGitStateSig = stateSig
+			publishCurrentGraph(repoPath, opts, b)
 		}
 	}
+}
+
+func publishCurrentGraph(repoPath string, opts *watchOptions, b *broker) {
+	dot, err := buildDOTGraph(repoPath, opts)
+	if errors.Is(err, errNoUncommittedChanges) {
+		b.publish(emptyDOTGraph)
+		return
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "graph rebuild error: %v\n", err)
+		return
+	}
+	b.publish(dot)
 }
 
 func isRelevantChange(event fsnotify.Event) bool {

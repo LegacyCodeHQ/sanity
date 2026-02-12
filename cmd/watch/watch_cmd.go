@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -73,7 +74,11 @@ func runWatch(cmd *cobra.Command, opts *watchOptions) error {
 		return fmt.Errorf("failed to listen on port %d: %w", opts.port, err)
 	}
 
-	go srv.Serve(ln)
+	go func() {
+		if serveErr := srv.Serve(ln); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			fmt.Fprintf(cmd.ErrOrStderr(), "watch server error: %v\n", serveErr)
+		}
+	}()
 
 	dot, err := buildDOTGraph(repoPath, opts)
 	if errors.Is(err, errNoUncommittedChanges) {
