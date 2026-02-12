@@ -18,7 +18,6 @@ type jsonGraphNode struct {
 	Path       string         `json:"path"`
 	Name       string         `json:"name"`
 	Attributes []string       `json:"attributes,omitempty"`
-	Extension  string         `json:"extension"`
 	Stats      *jsonNodeStats `json:"stats,omitempty"`
 }
 
@@ -55,9 +54,8 @@ func (f jsonFormatter) Format(g depgraph.FileDependencyGraph, opts RenderOptions
 	for _, path := range filePaths {
 		fileMetadata := g.Meta.Files[path]
 		node := jsonGraphNode{
-			Path:      path,
-			Name:      nodeNames[path],
-			Extension: fileMetadata.Extension,
+			Path: path,
+			Name: nodeNames[path],
 		}
 		if fileMetadata.IsTest {
 			node.Attributes = append(node.Attributes, "test")

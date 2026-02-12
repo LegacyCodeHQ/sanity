@@ -3,16 +3,14 @@
   "nodes": [
     {
       "path": "/project/main.go",
-      "name": "main.go",
-      "extension": ".go"
+      "name": "main.go"
     },
     {
       "path": "/project/main_test.go",
       "name": "main_test.go",
       "attributes": [
         "test"
-      ],
-      "extension": ".go"
+      ]
     }
   ],
   "edges": [

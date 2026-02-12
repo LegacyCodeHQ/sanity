@@ -7,7 +7,6 @@
       "attributes": [
         "new"
       ],
-      "extension": ".go",
       "stats": {
         "additions": 3,
         "deletions": 1
@@ -15,8 +14,7 @@
     },
     {
       "path": "/project/utils.go",
-      "name": "utils.go",
-      "extension": ".go"
+      "name": "utils.go"
     }
   ],
   "edges": [
