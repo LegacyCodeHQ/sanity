@@ -10,8 +10,6 @@ type dotFormatter struct{}
 
 type mermaidFormatter struct{}
 
-type jsonFormatter struct{}
-
 // Formatter is the interface that all graph formatters must implement.
 type Formatter interface {
 	// Format converts a dependency graph to a formatted string representation.
@@ -38,11 +36,6 @@ func NewFormatter(format string) (Formatter, error) {
 	default:
 		return nil, fmt.Errorf("unknown format: %s (valid options: %s)", format, SupportedFormats())
 	}
-}
-
-// NewInternalJSONFormatter returns the JSON formatter for non-CLI internal use.
-func NewInternalJSONFormatter() Formatter {
-	return jsonFormatter{}
 }
 
 // RenderOptions contains output-specific rendering options.

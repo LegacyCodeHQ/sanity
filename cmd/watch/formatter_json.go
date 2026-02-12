@@ -1,11 +1,14 @@
-package formatters
+package watch
 
 import (
 	"encoding/json"
 	"sort"
 
+	"github.com/LegacyCodeHQ/clarity/cmd/show/formatters"
 	"github.com/LegacyCodeHQ/clarity/depgraph"
 )
+
+type jsonGraphFormatter struct{}
 
 type jsonGraphOutput struct {
 	Label  string           `json:"label,omitempty"`
@@ -22,8 +25,8 @@ type jsonGraphNode struct {
 }
 
 type jsonNodeStats struct {
-	Additions int  `json:"additions"`
-	Deletions int  `json:"deletions"`
+	Additions int `json:"additions"`
+	Deletions int `json:"deletions"`
 }
 
 type jsonGraphEdge struct {
@@ -36,8 +39,8 @@ type jsonGraphCycle struct {
 	Path []string `json:"path"`
 }
 
-// Format converts the dependency graph to JSON.
-func (f jsonFormatter) Format(g depgraph.FileDependencyGraph, opts RenderOptions) (string, error) {
+// Format converts the dependency graph to JSON for internal watch server communication.
+func (f jsonGraphFormatter) Format(g depgraph.FileDependencyGraph, label string) (string, error) {
 	adjacency, err := depgraph.AdjacencyList(g.Graph)
 	if err != nil {
 		return "", err
@@ -48,7 +51,7 @@ func (f jsonFormatter) Format(g depgraph.FileDependencyGraph, opts RenderOptions
 		filePaths = append(filePaths, path)
 	}
 	sort.Strings(filePaths)
-	nodeNames := BuildNodeNames(filePaths)
+	nodeNames := formatters.BuildNodeNames(filePaths)
 
 	nodes := make([]jsonGraphNode, 0, len(filePaths))
 	for _, path := range filePaths {
@@ -93,7 +96,7 @@ func (f jsonFormatter) Format(g depgraph.FileDependencyGraph, opts RenderOptions
 	}
 
 	output := jsonGraphOutput{
-		Label:  opts.Label,
+		Label:  label,
 		Nodes:  nodes,
 		Edges:  edges,
 		Cycles: cycles,
@@ -104,9 +107,4 @@ func (f jsonFormatter) Format(g depgraph.FileDependencyGraph, opts RenderOptions
 		return "", err
 	}
 	return string(jsonBytes), nil
-}
-
-// GenerateURL reports that URL generation is not supported for JSON output.
-func (f jsonFormatter) GenerateURL(output string) (string, bool) {
-	return "", false
 }

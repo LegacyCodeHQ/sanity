@@ -30,10 +30,3 @@ func TestNewFormatter_UnknownFormat(t *testing.T) {
 		t.Fatalf("NewFormatter(unknown) expected error, got nil")
 	}
 }
-
-func TestNewInternalJSONFormatter(t *testing.T) {
-	f := NewInternalJSONFormatter()
-	if _, ok := f.(jsonFormatter); !ok {
-		t.Fatalf("NewInternalJSONFormatter() returned %T, want formatters.jsonFormatter", f)
-	}
-}
