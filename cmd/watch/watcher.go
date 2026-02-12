@@ -61,6 +61,7 @@ func watchAndRebuild(ctx context.Context, repoPath string, opts *watchOptions, b
 			debounceTimer = time.AfterFunc(debounceInterval, func() {
 				dot, err := buildDOTGraph(repoPath, opts)
 				if errors.Is(err, errNoUncommittedChanges) {
+					b.publish(emptyDOTGraph)
 					return
 				}
 				if err != nil {

@@ -77,6 +77,7 @@ func runWatch(cmd *cobra.Command, opts *watchOptions) error {
 
 	dot, err := buildDOTGraph(repoPath, opts)
 	if errors.Is(err, errNoUncommittedChanges) {
+		b.publish(emptyDOTGraph)
 		fmt.Fprintf(cmd.OutOrStdout(), "No uncommitted changes yet, waiting for file changes...\n")
 	} else if err != nil {
 		return fmt.Errorf("initial graph build failed: %w", err)
