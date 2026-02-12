@@ -4,18 +4,18 @@
     {
       "path": "/project/main.go",
       "name": "main.go",
-      "isTest": false,
+      "attributes": [
+        "new"
+      ],
       "extension": ".go",
       "stats": {
         "additions": 3,
-        "deletions": 1,
-        "isNew": false
+        "deletions": 1
       }
     },
     {
       "path": "/project/utils.go",
       "name": "utils.go",
-      "isTest": false,
       "extension": ".go"
     }
   ],

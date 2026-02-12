@@ -15,17 +15,16 @@ type jsonGraphOutput struct {
 }
 
 type jsonGraphNode struct {
-	Path      string         `json:"path"`
-	Name      string         `json:"name"`
-	IsTest    bool           `json:"isTest"`
-	Extension string         `json:"extension"`
-	Stats     *jsonNodeStats `json:"stats,omitempty"`
+	Path       string         `json:"path"`
+	Name       string         `json:"name"`
+	Attributes []string       `json:"attributes,omitempty"`
+	Extension  string         `json:"extension"`
+	Stats      *jsonNodeStats `json:"stats,omitempty"`
 }
 
 type jsonNodeStats struct {
 	Additions int  `json:"additions"`
 	Deletions int  `json:"deletions"`
-	IsNew     bool `json:"isNew"`
 }
 
 type jsonGraphEdge struct {
@@ -58,14 +57,18 @@ func (f jsonFormatter) Format(g depgraph.FileDependencyGraph, opts RenderOptions
 		node := jsonGraphNode{
 			Path:      path,
 			Name:      nodeNames[path],
-			IsTest:    fileMetadata.IsTest,
 			Extension: fileMetadata.Extension,
+		}
+		if fileMetadata.IsTest {
+			node.Attributes = append(node.Attributes, "test")
 		}
 		if fileMetadata.Stats != nil {
 			node.Stats = &jsonNodeStats{
 				Additions: fileMetadata.Stats.Additions,
 				Deletions: fileMetadata.Stats.Deletions,
-				IsNew:     fileMetadata.Stats.IsNew,
+			}
+			if fileMetadata.Stats.IsNew {
+				node.Attributes = append(node.Attributes, "new")
 			}
 		}
 		nodes = append(nodes, node)
