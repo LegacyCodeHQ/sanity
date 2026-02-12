@@ -136,6 +136,7 @@ func (b *broker) currentPayloadLocked() (graphStreamPayload, bool) {
 func newServer(b *broker, port int) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handleIndex)
+	mux.HandleFunc("/viewer.js", handleViewerJS)
 	mux.HandleFunc("/events", handleSSE(b))
 
 	return &http.Server{
@@ -148,6 +149,13 @@ func handleIndex(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if _, err := w.Write([]byte(indexHTML)); err != nil {
 		http.Error(w, "failed to render page", http.StatusInternalServerError)
+	}
+}
+
+func handleViewerJS(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	if _, err := w.Write([]byte(viewerJS)); err != nil {
+		http.Error(w, "failed to render script", http.StatusInternalServerError)
 	}
 }
 

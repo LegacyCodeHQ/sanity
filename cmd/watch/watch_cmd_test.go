@@ -88,6 +88,17 @@ func TestHandleIndex_ServesHTML(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Header().Get("Content-Type"), "text/html")
 	assert.Contains(t, w.Body.String(), "clarity watch")
+	assert.Contains(t, w.Body.String(), `src="/viewer.js"`)
+}
+
+func TestHandleViewerJS_ServesJavaScript(t *testing.T) {
+	req := httptest.NewRequest("GET", "/viewer.js", nil)
+	w := httptest.NewRecorder()
+
+	handleViewerJS(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Header().Get("Content-Type"), "text/javascript")
 	assert.Contains(t, w.Body.String(), "EventSource")
 }
 
