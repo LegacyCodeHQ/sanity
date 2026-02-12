@@ -333,7 +333,7 @@ func ResolveJavaScriptImportPath(sourceFile, importPath string, suppliedFiles ma
 	var resolvedPaths []string
 
 	// JavaScript extension resolution order
-	extensions := []string{".js", ".jsx", ".mjs"}
+	extensions := []string{".js", ".jsx", ".mjs", ".cjs"}
 
 	// Try direct path with extensions
 	for _, ext := range extensions {
@@ -348,6 +348,7 @@ func ResolveJavaScriptImportPath(sourceFile, importPath string, suppliedFiles ma
 		filepath.Join(basePath, "index.js"),
 		filepath.Join(basePath, "index.jsx"),
 		filepath.Join(basePath, "index.mjs"),
+		filepath.Join(basePath, "index.cjs"),
 	}
 
 	for _, indexPath := range indexPaths {
@@ -370,5 +371,5 @@ func ResolveJavaScriptImportPath(sourceFile, importPath string, suppliedFiles ma
 // hasJavaScriptExtension checks if a path already has a JavaScript extension
 func hasJavaScriptExtension(path string) bool {
 	ext := filepath.Ext(path)
-	return ext == ".js" || ext == ".jsx" || ext == ".mjs"
+	return ext == ".js" || ext == ".jsx" || ext == ".mjs" || ext == ".cjs"
 }

@@ -36,8 +36,8 @@ func TestSupportedLanguages(t *testing.T) {
 			}
 		case "JavaScript":
 			foundJavaScript = true
-			if len(language.Extensions) != 3 {
-				t.Fatalf("JavaScript extension count = %d, want 3", len(language.Extensions))
+			if len(language.Extensions) != 4 {
+				t.Fatalf("JavaScript extension count = %d, want 4", len(language.Extensions))
 			}
 		case "Python":
 			foundPython = true
@@ -117,6 +117,9 @@ func TestIsSupportedLanguageExtension(t *testing.T) {
 	}
 	if !IsSupportedLanguageExtension(".mjs") {
 		t.Fatalf("IsSupportedLanguageExtension(.mjs) = false, want true")
+	}
+	if !IsSupportedLanguageExtension(".cjs") {
+		t.Fatalf("IsSupportedLanguageExtension(.cjs) = false, want true")
 	}
 	if !IsSupportedLanguageExtension(".py") {
 		t.Fatalf("IsSupportedLanguageExtension(.py) = false, want true")

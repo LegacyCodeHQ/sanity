@@ -12,7 +12,11 @@ func TestIsTestFile(t *testing.T) {
 		{path: "/repo/src/viewer_state.test.mjs", want: true},
 		{path: "/repo/src/viewer_state.spec.mjs", want: true},
 		{path: "/repo/src/__tests__/viewer_state.mjs", want: true},
+		{path: "/repo/src/viewer_state.test.cjs", want: true},
+		{path: "/repo/src/viewer_state.spec.cjs", want: true},
+		{path: "/repo/src/__tests__/viewer_state.cjs", want: true},
 		{path: "/repo/src/viewer_state.mjs", want: false},
+		{path: "/repo/src/viewer_state.cjs", want: false},
 		{path: "/repo/src/viewer_state.ts", want: false},
 	}
 

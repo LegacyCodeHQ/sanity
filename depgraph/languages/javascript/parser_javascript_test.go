@@ -140,6 +140,21 @@ func TestResolveJavaScriptImportPath_MJS(t *testing.T) {
 	assert.Contains(t, resolved, "/project/src/feature/index.mjs")
 }
 
+func TestResolveJavaScriptImportPath_CJS(t *testing.T) {
+	suppliedFiles := map[string]bool{
+		"/project/src/legacy_state.cjs":  true,
+		"/project/src/legacy/index.cjs": true,
+	}
+
+	sourceFile := "/project/src/viewer.js"
+
+	resolved := ResolveJavaScriptImportPath(sourceFile, "./legacy_state.cjs", suppliedFiles)
+	assert.Contains(t, resolved, "/project/src/legacy_state.cjs")
+
+	resolved = ResolveJavaScriptImportPath(sourceFile, "./legacy", suppliedFiles)
+	assert.Contains(t, resolved, "/project/src/legacy/index.cjs")
+}
+
 // Helper functions
 
 func extractPaths(imports []JavaScriptImport) []string {
