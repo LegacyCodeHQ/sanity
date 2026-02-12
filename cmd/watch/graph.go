@@ -52,9 +52,7 @@ func buildDOTGraph(repoPath string, opts *watchOptions) (string, error) {
 		return "", err
 	}
 
-	renderOpts := formatters.RenderOptions{
-		Label: "clarity watch",
-	}
+	renderOpts := formatters.RenderOptions{}
 
 	return formatter.Format(fileGraph, renderOpts)
 }
@@ -64,7 +62,7 @@ var errNoUncommittedChanges = fmt.Errorf("no uncommitted changes")
 const emptyDOTGraph = `digraph dependencies {
   rankdir=LR;
   node [shape=box];
-  label="clarity watch • no uncommitted changes";
+  label="no uncommitted changes";
   labelloc=t;
   labeljust=l;
   fontsize=10;
