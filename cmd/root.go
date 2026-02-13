@@ -28,14 +28,13 @@ var enableDevCommands = "false"
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "clarity",
-	Short: "A software design tool for developers and coding agents.",
-	Long: `A software design tool for developers and coding agents.
+	Short: "A software design tool for AI-native developers and coding agents.",
+	Long: `A software design tool for AI-native developers and coding agents.
 
 Use cases:
-- Build maintainable software
-- Understand codebases
-- Audit AI-generated code
-- Stabilize and reclaim apps built with AI`,
+- Keep a live impact view while coding with "clarity watch"
+- Generate focused change snapshots with "clarity show"
+- Run repeatable design checks in developer and coding-agent workflows`,
 	Version: version,
 }
 
