@@ -531,7 +531,7 @@ func buildGraphLabel(opts *graphOptions, format formatters.OutputFormat, fromCom
 		labelRepoPath = "."
 	}
 
-	label := "clarity • "
+	label := fmt.Sprintf("%s • ", repoLabelName(labelRepoPath))
 	var err error
 
 	var commitLabel string
@@ -565,6 +565,14 @@ func buildGraphLabel(opts *graphOptions, format formatters.OutputFormat, fromCom
 	}
 
 	return label
+}
+
+func repoLabelName(repoPath string) string {
+	name := filepath.Base(filepath.Clean(repoPath))
+	if name == "." || name == string(filepath.Separator) || name == "" {
+		return "repo"
+	}
+	return name
 }
 
 func emitOutput(cmd *cobra.Command, opts *graphOptions, format formatters.OutputFormat, formatter formatters.Formatter, output string) error {

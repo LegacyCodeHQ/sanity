@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/LegacyCodeHQ/clarity/cmd/show/formatters"
 	"github.com/spf13/cobra"
 )
 
@@ -630,6 +631,43 @@ func TestGraphFileRelativePath_WithRepo_ResolvesFromRepoRoot(t *testing.T) {
 
 	if !strings.Contains(stdout.String(), `"main.go"`) {
 		t.Fatalf("expected graph output to include main.go node, got:\n%s", stdout.String())
+	}
+}
+
+func TestRepoLabelName_UsesRootDirectoryName(t *testing.T) {
+	repoDir := filepath.Join(t.TempDir(), "my-service")
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		t.Fatalf("os.MkdirAll() error = %v", err)
+	}
+
+	got := repoLabelName(repoDir)
+	if got != "my-service" {
+		t.Fatalf("repoLabelName() = %q, want %q", got, "my-service")
+	}
+}
+
+func TestBuildGraphLabel_UsesRepoDirectoryNamePrefix(t *testing.T) {
+	baseDir := t.TempDir()
+	repoDir := filepath.Join(baseDir, "my-service")
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		t.Fatalf("os.MkdirAll() error = %v", err)
+	}
+	gitInitRepo(t, repoDir)
+
+	filePath := filepath.Join(repoDir, "main.go")
+	if err := os.WriteFile(filePath, []byte("package main\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	gitRun(t, repoDir, "add", ".")
+	gitRun(t, repoDir, "commit", "-m", "add main.go")
+
+	label := buildGraphLabel(&graphOptions{repoPath: repoDir}, formatters.OutputFormatMermaid, "", "", false, []string{filePath})
+
+	if !strings.HasPrefix(label, "my-service • ") {
+		t.Fatalf("buildGraphLabel() = %q, want prefix %q", label, "my-service • ")
+	}
+	if !strings.Contains(label, " • 1 file") {
+		t.Fatalf("buildGraphLabel() = %q, want file count suffix", label)
 	}
 }
 
