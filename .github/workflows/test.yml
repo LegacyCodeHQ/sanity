@@ -33,8 +33,8 @@ jobs:
       - name: Verify dependencies
         run: go mod verify
 
-      - name: Run tests with coverage
-        run: make test-coverage
+      - name: Run consolidated quality gate
+        run: make check
 
       - name: Generate coverage profile
         run: make coverage

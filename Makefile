@@ -1,4 +1,4 @@
-.PHONY: test test-js test-update-golden test-coverage coverage coverage-html clean help build-dev release-check lint security housekeeping tools format
+.PHONY: help tools format lint vulncheck security housekeeping test test-go test-js test-update-golden test-coverage coverage coverage-html check build-dev release-check clean
 
 # Version information (can be overridden via command line)
 # Try to get version from git tag, otherwise use "dev"
@@ -20,12 +20,14 @@ help:
 	@echo "  lint               - Run golangci-lint"
 	@echo "  vulncheck          - Run govulncheck"
 	@echo "  housekeeping       - Run go mod tidy"
-	@echo "  test               - Run all tests"
-	@echo "  test-js            - Run JavaScript unit tests"
+	@echo "  test               - Run all Go and JavaScript tests"
+	@echo "  test-go            - Run Go unit and integration tests"
+	@echo "  test-js            - Run watch UI JavaScript tests"
 	@echo "  test-update-golden - Update golden test fixtures"
 	@echo "  test-coverage      - Run tests with coverage percentage"
 	@echo "  coverage           - Generate coverage profile (coverage.out)"
 	@echo "  coverage-html      - Generate HTML coverage report (coverage.html)"
+	@echo "  check              - Run lint, tests, and build (CI parity)"
 	@echo ""
 	@echo "Building:"
 	@echo "  build-dev          - Build for current platform with CGO"
@@ -59,8 +61,11 @@ lint: tools
 	$(TOOLS_BIN)/go-consistent ./...
 
 # Run govulncheck
-security: tools
+vulncheck: tools
 	$(TOOLS_BIN)/govulncheck ./...
+
+# Backward-compatible alias
+security: vulncheck
 
 # Normalize module dependencies
 housekeeping:
@@ -68,15 +73,21 @@ housekeeping:
 
 # Run all tests
 test:
-	go test ./...
+	$(MAKE) test-go
 	$(MAKE) test-js
+
+test-go:
+	go test ./...
 
 test-js:
 	node --test cmd/watch/viewer_state.test.mjs cmd/watch/viewer_protocol.test.mjs
 
 # Update golden test fixtures (only packages using goldie)
 test-update-golden:
-	go test ./tests/litmus/... ./tests/integration/graph/... ./tests/languagespecs/java/tests/... ./cmd/graph/formatters/dot/... ./cmd/graph/formatters/mermaid/... -args -update
+	go test ./tests/litmus/... ./tests/integration/graph/... ./tests/languagespecs/java/tests/... ./cmd/languages/... ./cmd/show/formatters/... ./cmd/watch/... ./cmd/why/... -args -update
+
+# Full product quality gate (used locally and in CI)
+check: lint test build-dev
 
 # Run tests with coverage percentage (excludes cmd packages which have no tests)
 test-coverage:
