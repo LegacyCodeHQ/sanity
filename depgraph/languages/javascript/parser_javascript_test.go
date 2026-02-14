@@ -156,28 +156,27 @@ func TestResolveJavaScriptImportPath_CJS(t *testing.T) {
 	assert.Contains(t, resolved, "/project/src/legacy/index.cjs")
 }
 
-func TestJavaScriptImports_RealMJSFile(t *testing.T) {
-	filePath := filepath.Join("..", "..", "..", "cmd", "watch", "viewer_state.test.mjs")
+func TestJavaScriptImports_MJSFile(t *testing.T) {
+	filePath := filepath.Join("testdata", "sample.test.mjs")
 	imports, err := JavaScriptImports(filePath)
 	require.NoError(t, err)
 
 	paths := extractPaths(imports)
-	assert.Contains(t, paths, "./viewer_state.mjs")
+	assert.Contains(t, paths, "./sample.mjs")
 }
 
-func TestResolveJavaScriptProjectImports_RealMJSFile(t *testing.T) {
-	root := filepath.Join("..", "..", "..")
-	testFile, err := filepath.Abs(filepath.Join(root, "cmd", "watch", "viewer_state.test.mjs"))
+func TestResolveJavaScriptProjectImports_MJSFile(t *testing.T) {
+	testFile, err := filepath.Abs(filepath.Join("testdata", "sample.test.mjs"))
 	require.NoError(t, err)
-	stateFile, err := filepath.Abs(filepath.Join(root, "cmd", "watch", "viewer_state.mjs"))
+	sampleFile, err := filepath.Abs(filepath.Join("testdata", "sample.mjs"))
 	require.NoError(t, err)
 
 	resolved, err := ResolveJavaScriptProjectImports(testFile, testFile, ".mjs", map[string]bool{
-		testFile:  true,
-		stateFile: true,
+		testFile:   true,
+		sampleFile: true,
 	}, vcs.FilesystemContentReader())
 	require.NoError(t, err)
-	assert.Contains(t, resolved, stateFile)
+	assert.Contains(t, resolved, sampleFile)
 }
 
 // Helper functions

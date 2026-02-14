@@ -1195,9 +1195,9 @@ func main() {
 	assert.Contains(t, mainDeps, indexPath, "main.go should depend on index.html")
 }
 
-func TestBuildDependencyGraph_RealMJSImports(t *testing.T) {
-	testFile := filepath.Join("..", "cmd", "watch", "viewer_state.test.mjs")
-	stateFile := filepath.Join("..", "cmd", "watch", "viewer_state.mjs")
+func TestBuildDependencyGraph_RealTypeScriptImports(t *testing.T) {
+	testFile := filepath.Join("..", "cmd", "watch", "web", "src", "lib", "state", "viewerState.test.ts")
+	stateFile := filepath.Join("..", "cmd", "watch", "web", "src", "lib", "state", "viewerState.ts")
 
 	graph, err := depgraph.BuildDependencyGraph([]string{testFile, stateFile}, vcs.FilesystemContentReader())
 	require.NoError(t, err)
