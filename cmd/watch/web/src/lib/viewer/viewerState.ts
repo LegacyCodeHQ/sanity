@@ -3,7 +3,7 @@
  * Pure functions for state transitions and view model computation.
  */
 
-import type { Snapshot, Collection, GraphStreamPayload } from './viewerProtocol';
+import type { Snapshot, Collection, GraphStreamPayload } from '../protocol/viewerProtocol';
 
 export interface ViewerState {
   workingSnapshots: Snapshot[];

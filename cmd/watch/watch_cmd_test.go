@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LegacyCodeHQ/clarity/cmd/watch/protocol"
+
 	"github.com/fsnotify/fsnotify"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -146,7 +148,7 @@ func TestHandleSSE_MultiLineData(t *testing.T) {
 
 	assert.Contains(t, body, "event: graph")
 
-	var payload graphStreamPayload
+	var payload protocol.GraphStreamPayload
 	require.NoError(t, decodeSSEPayload(body, &payload))
 	require.Len(t, payload.WorkingSnapshots, 1)
 	assert.Equal(t, multiLine, payload.WorkingSnapshots[0].DOT)
@@ -300,7 +302,7 @@ func TestHandleSSE_StreamsJSONPayload(t *testing.T) {
 	n, _ := resp.Body.Read(buf)
 	body := string(buf[:n])
 
-	var payload graphStreamPayload
+	var payload protocol.GraphStreamPayload
 	require.NoError(t, decodeSSEPayload(body, &payload))
 	require.Len(t, payload.WorkingSnapshots, 2)
 	assert.Equal(t, "digraph { A; }", payload.WorkingSnapshots[0].DOT)

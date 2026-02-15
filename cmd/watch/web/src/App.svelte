@@ -4,7 +4,7 @@
   import GraphContainer from './components/GraphContainer.svelte';
   import Timeline from './components/Timeline.svelte';
   import { graphStore } from './lib/stores/graphStore';
-  import { normalizeGraphStreamPayload } from './lib/state/viewerProtocol';
+  import { normalizeGraphStreamPayload } from './lib/protocol/viewerProtocol';
 
   interface Props {
     pageTitle: string;

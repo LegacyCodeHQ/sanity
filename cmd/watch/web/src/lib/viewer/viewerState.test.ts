@@ -7,9 +7,8 @@ import {
   getViewModel,
   mergePayload,
   type ViewerState,
-  type Snapshot,
-  type Collection,
 } from './viewerState';
+import type { Snapshot, Collection } from '../protocol/viewerProtocol';
 
 const TIMESTAMP = "2026-02-12T10:00:00Z";
 

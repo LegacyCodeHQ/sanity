@@ -13,8 +13,8 @@ import {
   getViewModel,
   type ViewerState,
   type ViewModel,
-} from '../state/viewerState';
-import type { GraphStreamPayload } from '../state/viewerProtocol';
+} from '../viewer/viewerState';
+import type { GraphStreamPayload } from '../protocol/viewerProtocol';
 
 function createGraphStore() {
   const initialState: ViewerState = normalizeState({

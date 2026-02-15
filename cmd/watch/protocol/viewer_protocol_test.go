@@ -1,4 +1,4 @@
-package watch
+package protocol
 
 import (
 	"encoding/json"
@@ -10,22 +10,22 @@ import (
 )
 
 func TestProtocolConstants_AreStable(t *testing.T) {
-	assert.Equal(t, "/", routeIndex)
-	assert.Equal(t, "/events", routeEvents)
-	assert.Equal(t, "graph", sseEventGraph)
+	assert.Equal(t, "/", RouteIndex)
+	assert.Equal(t, "/events", RouteEvents)
+	assert.Equal(t, "graph", SSEEventGraph)
 }
 
 func TestGraphStreamPayload_JSONContract(t *testing.T) {
 	ts := time.Date(2026, 2, 12, 10, 0, 0, 0, time.UTC)
-	payload := graphStreamPayload{
-		WorkingSnapshots: []graphSnapshot{
+	payload := GraphStreamPayload{
+		WorkingSnapshots: []GraphSnapshot{
 			{ID: 1, Timestamp: ts, DOT: "digraph { A -> B; }"},
 		},
-		PastCollections: []snapshotCollection{
+		PastCollections: []SnapshotCollection{
 			{
 				ID:        7,
 				Timestamp: ts,
-				Snapshots: []graphSnapshot{
+				Snapshots: []GraphSnapshot{
 					{ID: 2, Timestamp: ts, DOT: "digraph { X -> Y; }"},
 				},
 			},

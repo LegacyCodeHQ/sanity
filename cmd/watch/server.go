@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/LegacyCodeHQ/clarity/cmd/watch/protocol"
 )
 
 const maxSnapshots = 250
@@ -20,9 +22,9 @@ const watchPageTitleSuffix = "clarity watch"
 // broker manages SSE client connections and broadcasts graph snapshots.
 type broker struct {
 	mu             sync.Mutex
-	clients        map[chan graphStreamPayload]struct{}
-	history        []graphSnapshot
-	archivedCycles []snapshotCollection
+	clients        map[chan protocol.GraphStreamPayload]struct{}
+	history        []protocol.GraphSnapshot
+	archivedCycles []protocol.SnapshotCollection
 	nextID         int64
 	nextCycleID    int64
 	hasState       bool
@@ -30,12 +32,12 @@ type broker struct {
 
 func newBroker() *broker {
 	return &broker{
-		clients: make(map[chan graphStreamPayload]struct{}),
+		clients: make(map[chan protocol.GraphStreamPayload]struct{}),
 	}
 }
 
-func (b *broker) subscribe() chan graphStreamPayload {
-	ch := make(chan graphStreamPayload, 1)
+func (b *broker) subscribe() chan protocol.GraphStreamPayload {
+	ch := make(chan protocol.GraphStreamPayload, 1)
 	b.mu.Lock()
 	b.clients[ch] = struct{}{}
 	payload, ok := b.currentPayloadLocked()
@@ -46,7 +48,7 @@ func (b *broker) subscribe() chan graphStreamPayload {
 	return ch
 }
 
-func (b *broker) unsubscribe(ch chan graphStreamPayload) {
+func (b *broker) unsubscribe(ch chan protocol.GraphStreamPayload) {
 	b.mu.Lock()
 	delete(b.clients, ch)
 	close(ch)
@@ -61,7 +63,7 @@ func (b *broker) publish(dot string) {
 	}
 
 	b.nextID++
-	b.history = append(b.history, graphSnapshot{
+	b.history = append(b.history, protocol.GraphSnapshot{
 		ID:        b.nextID,
 		Timestamp: time.Now().UTC(),
 		DOT:       dot,
@@ -81,10 +83,10 @@ func (b *broker) publish(dot string) {
 func (b *broker) archiveWorkingSet() {
 	b.mu.Lock()
 	if len(b.history) > 0 {
-		archivedSnapshots := make([]graphSnapshot, len(b.history))
+		archivedSnapshots := make([]protocol.GraphSnapshot, len(b.history))
 		copy(archivedSnapshots, b.history)
 		b.nextCycleID++
-		b.archivedCycles = append(b.archivedCycles, snapshotCollection{
+		b.archivedCycles = append(b.archivedCycles, protocol.SnapshotCollection{
 			ID:        b.nextCycleID,
 			Timestamp: time.Now().UTC(),
 			Snapshots: archivedSnapshots,
@@ -116,25 +118,25 @@ func (b *broker) clearWorkingSet() {
 	b.mu.Unlock()
 }
 
-func (b *broker) currentPayloadLocked() (graphStreamPayload, bool) {
+func (b *broker) currentPayloadLocked() (protocol.GraphStreamPayload, bool) {
 	pastCollections := b.copyArchivedCyclesLocked()
 	latestPastCollectionID := b.latestPastCollectionIDLocked()
 	if len(b.history) == 0 {
 		if b.hasState {
-			return graphStreamPayload{
-				WorkingSnapshots:       []graphSnapshot{},
+			return protocol.GraphStreamPayload{
+				WorkingSnapshots:       []protocol.GraphSnapshot{},
 				PastCollections:        pastCollections,
 				LatestWorkingID:        0,
 				LatestPastCollectionID: latestPastCollectionID,
 			}, true
 		}
-		return graphStreamPayload{}, false
+		return protocol.GraphStreamPayload{}, false
 	}
 
-	snapshots := make([]graphSnapshot, len(b.history))
+	snapshots := make([]protocol.GraphSnapshot, len(b.history))
 	copy(snapshots, b.history)
 
-	return graphStreamPayload{
+	return protocol.GraphStreamPayload{
 		WorkingSnapshots:       snapshots,
 		PastCollections:        pastCollections,
 		LatestWorkingID:        b.history[len(b.history)-1].ID,
@@ -142,16 +144,16 @@ func (b *broker) currentPayloadLocked() (graphStreamPayload, bool) {
 	}, true
 }
 
-func (b *broker) copyArchivedCyclesLocked() []snapshotCollection {
+func (b *broker) copyArchivedCyclesLocked() []protocol.SnapshotCollection {
 	if len(b.archivedCycles) == 0 {
-		return []snapshotCollection{}
+		return []protocol.SnapshotCollection{}
 	}
 
-	copied := make([]snapshotCollection, len(b.archivedCycles))
+	copied := make([]protocol.SnapshotCollection, len(b.archivedCycles))
 	for i, cycle := range b.archivedCycles {
-		snapshots := make([]graphSnapshot, len(cycle.Snapshots))
+		snapshots := make([]protocol.GraphSnapshot, len(cycle.Snapshots))
 		copy(snapshots, cycle.Snapshots)
-		copied[i] = snapshotCollection{
+		copied[i] = protocol.SnapshotCollection{
 			ID:        cycle.ID,
 			Timestamp: cycle.Timestamp,
 			Snapshots: snapshots,
@@ -167,7 +169,7 @@ func (b *broker) latestPastCollectionIDLocked() int64 {
 	return b.archivedCycles[len(b.archivedCycles)-1].ID
 }
 
-func pushLatestPayload(ch chan graphStreamPayload, payload graphStreamPayload) {
+func pushLatestPayload(ch chan protocol.GraphStreamPayload, payload protocol.GraphStreamPayload) {
 	select {
 	case ch <- payload:
 		return
@@ -189,7 +191,7 @@ func newServer(b *broker, port int, repoPath string) *http.Server {
 	mux := http.NewServeMux()
 
 	// Serve index.html with page title injection
-	mux.HandleFunc(routeIndex, handleIndex(buildWatchPageTitle(repoPath)))
+	mux.HandleFunc(protocol.RouteIndex, handleIndex(buildWatchPageTitle(repoPath)))
 
 	// Serve all static assets from embedded dist directory
 	distFS, err := getDistFS()
@@ -199,7 +201,7 @@ func newServer(b *broker, port int, repoPath string) *http.Server {
 	mux.Handle("/assets/", http.FileServer(http.FS(distFS)))
 
 	// Serve SSE endpoint (unchanged)
-	mux.HandleFunc(routeEvents, handleSSE(b))
+	mux.HandleFunc(protocol.RouteEvents, handleSSE(b))
 
 	return &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
@@ -293,7 +295,7 @@ func handleSSE(b *broker) http.HandlerFunc {
 				if err != nil {
 					continue
 				}
-				fmt.Fprintf(w, "event: %s\n", sseEventGraph)
+				fmt.Fprintf(w, "event: %s\n", protocol.SSEEventGraph)
 				for _, line := range strings.Split(string(body), "\n") {
 					fmt.Fprintf(w, "data: %s\n", line)
 				}
