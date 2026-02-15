@@ -2,6 +2,7 @@ package show
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -130,10 +131,7 @@ func runGraph(cmd *cobra.Command, opts *graphOptions) error {
 		return err
 	}
 
-	verbose, err := cmd.Flags().GetBool("verbose")
-	if err == nil && verbose {
-		emitUnsupportedFileWarning(cmd, filePaths)
-	}
+	emitUnsupportedFileWarning(filePaths)
 
 	contentReader := selectContentReader(opts, toCommit)
 
@@ -729,7 +727,7 @@ func expandPaths(paths []string, includeUnsupportedFiles bool) ([]string, error)
 	return result, nil
 }
 
-func emitUnsupportedFileWarning(cmd *cobra.Command, filePaths []string) {
+func emitUnsupportedFileWarning(filePaths []string) {
 	unsupportedCount := 0
 	unsupportedByExt := make(map[string]bool)
 
@@ -757,10 +755,10 @@ func emitUnsupportedFileWarning(cmd *cobra.Command, filePaths []string) {
 	}
 	sort.Strings(unsupportedExts)
 
-	fmt.Fprintf(cmd.ErrOrStderr(),
-		"Warning: dependency extraction is unsupported for %d file(s) (%v); rendering standalone nodes without dependency edges for those files.\n",
-		unsupportedCount,
-		unsupportedExts)
+	slog.Debug("dependency extraction is unsupported for some files; rendering standalone nodes without dependency edges",
+		"unsupported_file_count", unsupportedCount,
+		"unsupported_extensions", unsupportedExts,
+	)
 }
 
 // resolveAndValidatePaths resolves file paths to absolute paths and validates they exist in the graph.

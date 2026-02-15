@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"log/slog"
 	"os"
 	"strconv"
 
@@ -36,6 +37,17 @@ Use cases:
 - Generate focused change snapshots with "clarity show"
 - Run repeatable design checks in developer and coding-agent workflows`,
 	Version: version,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		verbose, _ := cmd.Flags().GetBool("verbose")
+		level := slog.LevelWarn
+		if verbose {
+			level = slog.LevelDebug
+		}
+		slog.SetDefault(slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{
+			Level: level,
+		})))
+		return nil
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
