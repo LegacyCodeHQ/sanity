@@ -124,6 +124,21 @@ func TestIsTestFile(t *testing.T) {
 			want:     false,
 		},
 		{
+			name:     "svelte test file",
+			filePath: "/project/src/App.test.svelte",
+			want:     true,
+		},
+		{
+			name:     "svelte spec file",
+			filePath: "/project/src/Button.spec.svelte",
+			want:     true,
+		},
+		{
+			name:     "svelte non-test file",
+			filePath: "/project/src/App.svelte",
+			want:     false,
+		},
+		{
 			name:     "python test prefix",
 			filePath: "/project/tests/test_handlers.py",
 			want:     true,

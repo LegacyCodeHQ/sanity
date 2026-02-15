@@ -10,6 +10,7 @@
 ◐ Python      .py
 ◐ Ruby        .rb
 ◐ Rust        .rs
+○ Svelte      .svelte
 ◐ Swift       .swift
 ◐ TypeScript  .ts, .tsx
 

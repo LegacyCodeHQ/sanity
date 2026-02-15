@@ -12,6 +12,7 @@ import (
 	"github.com/LegacyCodeHQ/clarity/depgraph/languages/python"
 	"github.com/LegacyCodeHQ/clarity/depgraph/languages/ruby"
 	"github.com/LegacyCodeHQ/clarity/depgraph/languages/rust"
+	"github.com/LegacyCodeHQ/clarity/depgraph/languages/svelte"
 	"github.com/LegacyCodeHQ/clarity/depgraph/languages/swift"
 	"github.com/LegacyCodeHQ/clarity/depgraph/languages/typescript"
 )
@@ -28,6 +29,7 @@ var modules = []Module{
 	python.Module{},
 	ruby.Module{},
 	rust.Module{},
+	svelte.Module{},
 	swift.Module{},
 	typescript.Module{},
 }
