@@ -58,14 +58,12 @@ Follow the established history patterns:
 
 ## Clarity
 
-This project uses `clarity` to visualize code changes, provide design feedback, and guide refactoring.
+This project uses `clarity` to visualize design and guide structural refactoring.
 
 ### When to Use Clarity
 
-1. **After making changes** - Run `clarity` to visualize your changes, understand impact, and prepare context for developer review.
-  - **Always run `clarity show` when you modify 3 or more files** to ensure the developer can review the full scope of changes
-2. **Discussing design** - Use `clarity` to visualize architecture and dependencies for specific files, directories, or commits when discussing design decisions with the developer.
-3. **Refactoring verification** - After implementing design changes, run `clarity` to verify the resulting structure aligns with the discussed design.
+1. **Discussing design** - Use `clarity` to visualize architecture and dependencies for specific files, directories, or commits when discussing design decisions with the developer.
+2. **Refactoring verification** - After implementing design changes, run `clarity` to verify the resulting structure aligns with the discussed design.
 
 ### How to Use Clarity
 
@@ -91,7 +89,6 @@ This project uses `clarity` to visualize code changes, provide design feedback, 
 ### Quick Reference
 
 ```bash
-clarity show                   # Visualize uncommitted changes (most common)
 clarity show -c HEAD           # Visualize changes in last commit
 clarity show -i <files/dirs>   # Build graph from specific files or directories (comma-separated)
 clarity show -w <file1,file2>  # Find all paths between two or more files (comma-separated)
@@ -104,7 +101,7 @@ For full reference, use `clarity show -h`
 ## Codebase Notes
 
 - Language: Go, plus a web UI build with npm in `cmd/watch/web`
-- The web UI is served by the Go web server (not a separate Node server)
+- The web UI is served by the Go web server
 - Entry points:
   - Go: `main.go`
   - Frontend: `cmd/watch/web`
