@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -127,18 +128,47 @@ func isRelevantChange(event fsnotify.Event) bool {
 }
 
 func addWatchDirs(watcher *fsnotify.Watcher, root string) error {
+	return addWatchDirsWithAdder(root, watcher.Add)
+}
+
+type watchDirAdder func(path string) error
+
+func addWatchDirsWithAdder(root string, add watchDirAdder) error {
 	return filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
+			if isMissingPath(err) && path != root {
+				return nil
+			}
 			return err
 		}
-		if d.IsDir() {
+		isDir := d.IsDir()
+		if d.Type()&os.ModeSymlink != 0 {
+			info, err := os.Stat(path)
+			if err != nil {
+				if isMissingPath(err) {
+					return nil
+				}
+				return err
+			}
+			isDir = info.IsDir()
+		}
+		if isDir {
 			if skippedDirs[d.Name()] {
 				return filepath.SkipDir
 			}
-			return watcher.Add(path)
+			if err := add(path); err != nil {
+				if isMissingPath(err) {
+					return nil
+				}
+				return err
+			}
 		}
 		return nil
 	})
+}
+
+func isMissingPath(err error) bool {
+	return os.IsNotExist(err) || errors.Is(err, fs.ErrNotExist)
 }
 
 func extractHEADSignature(repositoryStateSignature string) string {
