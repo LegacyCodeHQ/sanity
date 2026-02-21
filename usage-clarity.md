@@ -95,6 +95,7 @@ clarity show [OPTIONS]
 | `--format` | `-f` | string | `opts.outputFormat` | fmt.Sprintf("Output format (%s)", formatters.SupportedFormats()) |
 | `--repo` | `-r` | string | `""` | Git repository path (default: current directory) |
 | `--commit` | `-c` | string | `""` | Git commit or range to analyze (e.g., f0459ec, HEAD~3, f0459ec...be3d11a) |
+| `--direction` | `-d` | string | `opts.direction` | fmt.Sprintf("Graph direction (%s)", formatters.SupportedDirections()) |
 | `--file` | `-p` | string | `""` | Show dependencies for a specific file |
 | `--url` | `-u` | bool | `false` | Generate visualization URL (supported formats: dot, mermaid) |
 | `--input` | `-i` | []string | `nil` | Build graph from specific files and/or directories (comma-separated) |
@@ -119,6 +120,7 @@ clarity watch [OPTIONS]
 | Flag | Short | Type | Default | Description |
 |---|---|---|---|---|
 | `--repo` | `-r` | string | `""` | Git repository path (default: current directory) |
+| `--direction` | `-d` | string | `opts.direction` | fmt.Sprintf("Graph direction (%s)", formatters.SupportedDirections()) |
 | `--input` | `-i` | []string | `nil` | Watch specific files and/or directories (comma-separated) |
 | `--port` | `-P` | int | `opts.port` | HTTP server port |
 | `--include-ext` | | string | `""` | Include only files with these extensions (comma-separated, e.g. .go,.java) |
