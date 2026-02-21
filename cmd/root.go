@@ -11,6 +11,7 @@ import (
 	"github.com/LegacyCodeHQ/clarity/cmd/show"
 	watchcmd "github.com/LegacyCodeHQ/clarity/cmd/watch"
 	whycmd "github.com/LegacyCodeHQ/clarity/cmd/why"
+	"github.com/LegacyCodeHQ/clarity/internal/mcplogdlog"
 	"github.com/spf13/cobra"
 )
 
@@ -46,6 +47,12 @@ Use cases:
 		slog.SetDefault(slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{
 			Level: level,
 		})))
+		mcplogdlog.Info("command start", map[string]any{
+			"command":   cmd.Name(),
+			"version":   version,
+			"commit":    commit,
+			"buildDate": buildDate,
+		})
 		return nil
 	},
 }
@@ -55,6 +62,9 @@ Use cases:
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
+		mcplogdlog.Error("command failed", map[string]any{
+			"error": err.Error(),
+		})
 		os.Exit(1)
 	}
 }

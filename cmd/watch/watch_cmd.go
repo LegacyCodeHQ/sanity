@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/LegacyCodeHQ/clarity/cmd/show/formatters"
+	"github.com/LegacyCodeHQ/clarity/internal/mcplogdlog"
 	"github.com/spf13/cobra"
 )
 
@@ -51,6 +52,13 @@ func NewCommand() *cobra.Command {
 }
 
 func runWatch(cmd *cobra.Command, opts *watchOptions) error {
+	mcplogdlog.Info("watch: start", map[string]any{
+		"repo":      opts.repoPath,
+		"port":      opts.port,
+		"input":     opts.includes,
+		"exclude":   opts.excludes,
+		"direction": opts.direction,
+	})
 	repoPath := opts.repoPath
 	if repoPath == "" {
 		repoPath = "."
@@ -73,6 +81,7 @@ func runWatch(cmd *cobra.Command, opts *watchOptions) error {
 
 	ln, actualPort, err := listenWithPortFallback(opts.port)
 	if err != nil {
+		mcplogdlog.Error("watch: listen failed", map[string]any{"error": err.Error()})
 		return err
 	}
 	defer ln.Close()
@@ -91,6 +100,7 @@ func runWatch(cmd *cobra.Command, opts *watchOptions) error {
 		b.clearWorkingSet()
 		fmt.Fprintf(cmd.OutOrStdout(), "No uncommitted changes yet, waiting for file changes...\n")
 	} else if err != nil {
+		mcplogdlog.Error("watch: initial graph build failed", map[string]any{"error": err.Error()})
 		return fmt.Errorf("initial graph build failed: %w", err)
 	} else {
 		b.publish(dot)
