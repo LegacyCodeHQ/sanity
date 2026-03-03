@@ -113,7 +113,7 @@ jobs:
       - name: Download checksums
         run: |
           VERSION=${{ steps.version.outputs.version }}
-          curl -sL "https://github.com/LegacyCodeHQ/clarity/releases/download/v${VERSION}/clarity_${VERSION}_checksums.txt" -o checksums.txt
+          curl -sL "https://github.com/LegacyCodeHQ/clarity-cli/releases/download/v${VERSION}/clarity_${VERSION}_checksums.txt" -o checksums.txt
 
       - name: Parse checksums
         id: checksums
@@ -142,26 +142,26 @@ jobs:
           cat > Formula/clarity.rb <<EOF
           class Clarity < Formula
             desc "CLI tool for analyzing and visualizing dependency graphs"
-            homepage "https://github.com/LegacyCodeHQ/clarity"
+            homepage "https://github.com/LegacyCodeHQ/clarity-cli"
             version "${VERSION}"
             license "AGPL-3.0-only"
 
             on_macos do
               if Hardware::CPU.arm?
-                url "https://github.com/LegacyCodeHQ/clarity/releases/download/v${VERSION}/clarity_${VERSION}_darwin_arm64.tar.gz"
+                url "https://github.com/LegacyCodeHQ/clarity-cli/releases/download/v${VERSION}/clarity_${VERSION}_darwin_arm64.tar.gz"
                 sha256 "${{ steps.checksums.outputs.darwin_arm64 }}"
               else
-                url "https://github.com/LegacyCodeHQ/clarity/releases/download/v${VERSION}/clarity_${VERSION}_darwin_amd64.tar.gz"
+                url "https://github.com/LegacyCodeHQ/clarity-cli/releases/download/v${VERSION}/clarity_${VERSION}_darwin_amd64.tar.gz"
                 sha256 "${{ steps.checksums.outputs.darwin_amd64 }}"
               end
             end
 
             on_linux do
               if Hardware::CPU.arm?
-                url "https://github.com/LegacyCodeHQ/clarity/releases/download/v${VERSION}/clarity_${VERSION}_linux_arm64.tar.gz"
+                url "https://github.com/LegacyCodeHQ/clarity-cli/releases/download/v${VERSION}/clarity_${VERSION}_linux_arm64.tar.gz"
                 sha256 "${{ steps.checksums.outputs.linux_arm64 }}"
               else
-                url "https://github.com/LegacyCodeHQ/clarity/releases/download/v${VERSION}/clarity_${VERSION}_linux_amd64.tar.gz"
+                url "https://github.com/LegacyCodeHQ/clarity-cli/releases/download/v${VERSION}/clarity_${VERSION}_linux_amd64.tar.gz"
                 sha256 "${{ steps.checksums.outputs.linux_amd64 }}"
               end
             end
