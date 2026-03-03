@@ -2,11 +2,20 @@
   import { onMount } from 'svelte';
   import { viewModel } from '../lib/stores/graphStore';
   import { initGraphviz, renderDot } from '../lib/graphviz';
+  import {
+    beginRender,
+    cancelPendingRenders,
+    clearRenderedDot,
+    completeRender,
+    createRenderState,
+    shouldRenderDot,
+  } from '../lib/viewer/renderSequence';
   import Skeleton from '../lib/components/ui/skeleton.svelte';
 
   let graphContainer: HTMLDivElement;
   let graphvizReady = $state(false);
   let renderError = $state<string | null>(null);
+  let renderState = $state(createRenderState());
 
   onMount(async () => {
     try {
@@ -21,20 +30,38 @@
   async function renderGraph(dot: string) {
     if (!graphvizReady || !graphContainer) return;
 
+    const started = beginRender(renderState);
+    renderState = started.state;
+    const requestID = started.requestID;
+
     try {
       const svg = await renderDot(dot);
+      renderState = completeRender(renderState, requestID, dot);
+      if (requestID !== renderState.activeRequestID) {
+        return;
+      }
+
       graphContainer.innerHTML = svg;
       renderError = null;
     } catch (err) {
+      if (requestID !== renderState.activeRequestID) {
+        return;
+      }
+
       console.error('Graphviz render error:', err);
       renderError = 'Render error';
     }
   }
 
   $effect(() => {
-    if ($viewModel.renderDot && graphvizReady) {
-      renderGraph($viewModel.renderDot);
-    } else if (!$viewModel.renderDot && graphContainer) {
+    const dot = $viewModel.renderDot;
+    if (dot && graphvizReady) {
+      if (shouldRenderDot(renderState, dot)) {
+        renderGraph(dot);
+      }
+    } else if (!dot && graphContainer) {
+      renderState = cancelPendingRenders(renderState);
+      renderState = clearRenderedDot(renderState);
       graphContainer.innerHTML = '';
     }
   });
