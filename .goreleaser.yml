@@ -1,6 +1,7 @@
 # GoReleaser configuration for Clarity CLI
 # Documentation: https://goreleaser.com
 version: 2
+project_name: clarity
 
 # Build configuration
 # NOTE: This project uses CGO (tree-sitter C bindings). Cross-compilation is handled
