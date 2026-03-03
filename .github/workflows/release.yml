@@ -63,10 +63,11 @@ jobs:
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
-          version: '~> v2'
-          args: release --clean
+          version: latest
+          args: release --clean --verbose
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GODEBUG: http2client=0
 
   publish-npm:
     name: Publish npm Package
