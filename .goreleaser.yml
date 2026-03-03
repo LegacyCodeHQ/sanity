@@ -96,14 +96,14 @@ changelog:
 release:
   github:
     owner: LegacyCodeHQ
-    name: clarity
+    name: clarity-cli
   draft: false
   prerelease: auto
   mode: append
   name_template: "v{{.Version}}"
   header: |
   footer: |
-    **Full Changelog**: https://github.com/LegacyCodeHQ/clarity/compare/{{ .PreviousTag }}...{{ .Tag }}
+    **Full Changelog**: https://github.com/LegacyCodeHQ/clarity-cli/compare/{{ .PreviousTag }}...{{ .Tag }}
 
 # Homebrew tap - handled by separate workflow job
 # See .github/workflows/release.yml for Homebrew tap publishing
