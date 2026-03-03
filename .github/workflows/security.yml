@@ -9,6 +9,8 @@ on:
 jobs:
   govulncheck:
     name: Govulncheck
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     strategy:
       matrix:
