@@ -10,7 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
-    "check": "svelte-check --tsconfig ./tsconfig.json"
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "knip": "npx --yes knip@5 --config knip.json",
+    "knip:report": "npx --yes knip@5 --config knip.json --no-exit-code --reporter compact"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.2",

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/main.ts",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "svelte.config.js",
+    "postcss.config.js",
+    "tailwind.config.js"
+  ],
+  "project": [
+    "src/**/*.{ts,svelte}",
+    "*.config.{ts,js,mjs,cjs}"
+  ],
+  "ignore": [
+    "dist/**",
+    "node_modules/**"
+  ]
+}
