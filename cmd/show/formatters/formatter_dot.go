@@ -130,7 +130,7 @@ func (f dotFormatter) Format(g depgraph.FileDependencyGraph, opts RenderOptions)
 	// First, define node styles based on file extensions
 	for _, source := range filePaths {
 		sourceBase := filepath.Base(source)
-		sourceNodeKey := nodeNames[source]
+		sourceNodeKey := dotNodeKey(source, opts.BasePath)
 
 		if !styledNodes[sourceNodeKey] {
 			var color string
@@ -206,9 +206,9 @@ func (f dotFormatter) Format(g depgraph.FileDependencyGraph, opts RenderOptions)
 		copy(sortedDeps, deps)
 		sort.Strings(sortedDeps)
 
-		sourceNodeKey := nodeNames[source]
+		sourceNodeKey := dotNodeKey(source, opts.BasePath)
 		for _, dep := range sortedDeps {
-			depNodeKey := nodeNames[dep]
+			depNodeKey := dotNodeKey(dep, opts.BasePath)
 			edgeMD := g.Meta.Edges[depgraph.FileEdge{From: source, To: dep}]
 			if edgeMD.InCycle {
 				sb.WriteString(fmt.Sprintf("  %q -> %q [color=red, style=dashed];\n", sourceNodeKey, depNodeKey))
@@ -229,4 +229,18 @@ func (f dotFormatter) Format(g depgraph.FileDependencyGraph, opts RenderOptions)
 func (f dotFormatter) GenerateURL(output string) (string, bool) {
 	encoded := url.PathEscape(output)
 	return fmt.Sprintf("https://dreampuf.github.io/GraphvizOnline/?engine=dot#%s", encoded), true
+}
+
+func dotNodeKey(path, basePath string) string {
+	if basePath == "" {
+		return path
+	}
+	rel, err := filepath.Rel(basePath, path)
+	if err != nil {
+		return path
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return path
+	}
+	return rel
 }

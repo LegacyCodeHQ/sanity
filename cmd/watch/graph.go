@@ -58,6 +58,7 @@ func buildDOTGraph(repoPath string, opts *watchOptions) (string, error) {
 	}
 	renderOpts := formatters.RenderOptions{
 		Direction: direction,
+		BasePath:  repoPath,
 	}
 
 	return formatter.Format(fileGraph, renderOpts)

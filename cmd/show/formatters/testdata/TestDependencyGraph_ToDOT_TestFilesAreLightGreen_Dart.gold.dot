@@ -2,12 +2,12 @@ digraph dependencies {
   rankdir=LR;
   node [shape=box];
 
-  "main.dart" [label="main.dart", style=filled, fillcolor=white];
-  "utils.dart" [label="utils.dart", style=filled, fillcolor=white];
-  "main_test.dart" [label="main_test.dart", style=filled, fillcolor=lightgreen];
-  "utils_test.dart" [label="utils_test.dart", style=filled, fillcolor=lightgreen];
+  "/project/lib/main.dart" [label="main.dart", style=filled, fillcolor=white];
+  "/project/lib/utils.dart" [label="utils.dart", style=filled, fillcolor=white];
+  "/project/test/main_test.dart" [label="main_test.dart", style=filled, fillcolor=lightgreen];
+  "/project/test/utils_test.dart" [label="utils_test.dart", style=filled, fillcolor=lightgreen];
 
-  "main.dart" -> "utils.dart";
-  "main_test.dart" -> "main.dart";
-  "utils_test.dart" -> "utils.dart";
+  "/project/lib/main.dart" -> "/project/lib/utils.dart";
+  "/project/test/main_test.dart" -> "/project/lib/main.dart";
+  "/project/test/utils_test.dart" -> "/project/lib/utils.dart";
 }

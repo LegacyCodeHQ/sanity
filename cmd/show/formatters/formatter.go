@@ -44,4 +44,6 @@ type RenderOptions struct {
 	Label string
 	// Direction is the layout direction for the graph.
 	Direction GraphDirection
+	// BasePath is an optional filesystem base used to derive stable relative node IDs.
+	BasePath string
 }

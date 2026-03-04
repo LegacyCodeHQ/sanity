@@ -7,20 +7,20 @@ digraph dependencies {
   fontsize=10;
   fontname=Courier;
 
-  "graph.go" [label="graph.go\n+2 -2", style=filled, fillcolor=white];
-  "dart_parser.go" [label="dart_parser.go\n+1 -1", style=filled, fillcolor=white];
-  "dart_parser_test.go" [label="dart_parser_test.go\n+1 -1", style=filled, fillcolor=lightgreen];
-  "dependency_graph.go" [label="dependency_graph.go\n+1 -1", style=filled, fillcolor=white];
-  "dependency_graph_test.go" [label="dependency_graph_test.go\n+1 -1", style=filled, fillcolor=lightgreen];
-  "go_parser.go" [label="go_parser.go\n+2 -2", style=filled, fillcolor=white];
-  "go_parser_test.go" [label="go_parser_test.go\n+5 -5", style=filled, fillcolor=lightgreen];
-  "go_symbols.go" [label="go_symbols.go\n+1 -1", style=filled, fillcolor=white];
+  "cmd/graph.go" [label="graph.go\n+2 -2", style=filled, fillcolor=white];
+  "parsers/dart_parser.go" [label="dart_parser.go\n+1 -1", style=filled, fillcolor=white];
+  "parsers/dart_parser_test.go" [label="dart_parser_test.go\n+1 -1", style=filled, fillcolor=lightgreen];
+  "parsers/dependency_graph.go" [label="dependency_graph.go\n+1 -1", style=filled, fillcolor=white];
+  "parsers/dependency_graph_test.go" [label="dependency_graph_test.go\n+1 -1", style=filled, fillcolor=lightgreen];
+  "parsers/go_parser.go" [label="go_parser.go\n+2 -2", style=filled, fillcolor=white];
+  "parsers/go_parser_test.go" [label="go_parser_test.go\n+5 -5", style=filled, fillcolor=lightgreen];
+  "parsers/go_symbols.go" [label="go_symbols.go\n+1 -1", style=filled, fillcolor=white];
 
-  "graph.go" -> "dependency_graph.go";
-  "dart_parser_test.go" -> "dart_parser.go";
-  "dependency_graph.go" -> "dart_parser.go";
-  "dependency_graph.go" -> "go_parser.go";
-  "dependency_graph.go" -> "go_symbols.go";
-  "dependency_graph_test.go" -> "dependency_graph.go";
-  "go_parser_test.go" -> "go_parser.go";
+  "cmd/graph.go" -> "parsers/dependency_graph.go";
+  "parsers/dart_parser_test.go" -> "parsers/dart_parser.go";
+  "parsers/dependency_graph.go" -> "parsers/dart_parser.go";
+  "parsers/dependency_graph.go" -> "parsers/go_parser.go";
+  "parsers/dependency_graph.go" -> "parsers/go_symbols.go";
+  "parsers/dependency_graph_test.go" -> "parsers/dependency_graph.go";
+  "parsers/go_parser_test.go" -> "parsers/go_parser.go";
 }

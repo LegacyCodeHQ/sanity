@@ -7,13 +7,13 @@ digraph dependencies {
   fontsize=10;
   fontname=Courier;
 
-  "graph.go" [label="graph.go\n+38 -4", style=filled, fillcolor=white];
-  "repository.go" [label="🪴 repository.go\n+141", style=filled, fillcolor=white];
-  "repository_test.go" [label="🪴 repository_test.go\n+267", style=filled, fillcolor=lightgreen];
+  "cmd/graph.go" [label="graph.go\n+38 -4", style=filled, fillcolor=white];
+  "git/repository.go" [label="🪴 repository.go\n+141", style=filled, fillcolor=white];
+  "git/repository_test.go" [label="🪴 repository_test.go\n+267", style=filled, fillcolor=lightgreen];
   "helper.dart" [label="🪴 helper.dart\n+3", style=filled, fillcolor=lightblue];
   "test.dart" [label="🪴 test.dart\n+5", style=filled, fillcolor=lightblue];
 
-  "graph.go" -> "repository.go";
-  "repository_test.go" -> "repository.go";
+  "cmd/graph.go" -> "git/repository.go";
+  "git/repository_test.go" -> "git/repository.go";
   "helper.dart" -> "test.dart";
 }

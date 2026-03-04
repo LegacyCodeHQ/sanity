@@ -193,6 +193,7 @@ func runGraph(cmd *cobra.Command, opts *graphOptions) error {
 	renderOpts := formatters.RenderOptions{
 		Label:     label,
 		Direction: direction,
+		BasePath:  resolveRenderBasePath(opts.repoPath, filePaths),
 	}
 
 	output, err := formatter.Format(fileGraph, renderOpts)
@@ -201,6 +202,83 @@ func runGraph(cmd *cobra.Command, opts *graphOptions) error {
 	}
 
 	return emitOutput(cmd, opts, format, formatter, output)
+}
+
+func resolveRenderBasePath(repoPath string, filePaths []string) string {
+	if repoPath != "" && allPathsWithinBase(repoPath, filePaths) {
+		return repoPath
+	}
+
+	common := commonPathPrefix(filePaths)
+	if common == "" || common == string(filepath.Separator) {
+		return ""
+	}
+	return common
+}
+
+func allPathsWithinBase(basePath string, filePaths []string) bool {
+	base := filepath.Clean(basePath)
+	for _, path := range filePaths {
+		rel, err := filepath.Rel(base, path)
+		if err != nil {
+			return false
+		}
+		if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+			return false
+		}
+	}
+	return true
+}
+
+func commonPathPrefix(paths []string) string {
+	if len(paths) == 0 {
+		return ""
+	}
+
+	splitPath := func(path string) (string, []string) {
+		clean := filepath.Clean(path)
+		volume := filepath.VolumeName(clean)
+		rest := strings.TrimPrefix(clean, volume)
+		rest = strings.TrimPrefix(rest, string(filepath.Separator))
+		if rest == "" {
+			return volume, nil
+		}
+		return volume, strings.Split(rest, string(filepath.Separator))
+	}
+
+	volume, parts := splitPath(paths[0])
+	commonParts := append([]string(nil), parts...)
+	for _, path := range paths[1:] {
+		v, p := splitPath(path)
+		if !strings.EqualFold(v, volume) {
+			return ""
+		}
+		max := len(commonParts)
+		if len(p) < max {
+			max = len(p)
+		}
+		i := 0
+		for i < max && commonParts[i] == p[i] {
+			i++
+		}
+		commonParts = commonParts[:i]
+		if len(commonParts) == 0 {
+			break
+		}
+	}
+
+	if len(commonParts) == 0 {
+		return volume + string(filepath.Separator)
+	}
+
+	joined := filepath.Join(commonParts...)
+	if volume != "" {
+		return filepath.Join(volume+string(filepath.Separator), joined)
+	}
+	if strings.HasPrefix(paths[0], string(filepath.Separator)) {
+		return filepath.Join(string(filepath.Separator), joined)
+	}
+	return joined
 }
 
 func validateGraphOptions(opts *graphOptions) error {

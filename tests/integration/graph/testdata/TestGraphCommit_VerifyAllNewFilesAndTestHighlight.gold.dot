@@ -7,13 +7,13 @@ digraph dependencies {
   fontsize=10;
   fontname=Courier;
 
-  "binding.go" [label="🪴 binding.go\n+17", style=filled, fillcolor=lightyellow];
-  "binding_test.go" [label="🪴 binding_test.go\n+14", style=filled, fillcolor=lightgreen];
-  "parser.c" [label="🪴 parser.c\n+199872", style=filled, fillcolor=white];
-  "parser.h" [label="🪴 parser.h\n+286", style=filled, fillcolor=mistyrose];
-  "scanner.c" [label="🪴 scanner.c\n+130", style=filled, fillcolor=white];
+  "tree_sitter_dart/binding.go" [label="🪴 binding.go\n+17", style=filled, fillcolor=lightyellow];
+  "tree_sitter_dart/binding_test.go" [label="🪴 binding_test.go\n+14", style=filled, fillcolor=lightgreen];
+  "tree_sitter_dart/parser.c" [label="🪴 parser.c\n+199872", style=filled, fillcolor=white];
+  "tree_sitter_dart/parser.h" [label="🪴 parser.h\n+286", style=filled, fillcolor=mistyrose];
+  "tree_sitter_dart/scanner.c" [label="🪴 scanner.c\n+130", style=filled, fillcolor=white];
 
-  "binding_test.go" -> "binding.go";
-  "parser.c" -> "parser.h";
-  "scanner.c" -> "parser.h";
+  "tree_sitter_dart/binding_test.go" -> "tree_sitter_dart/binding.go";
+  "tree_sitter_dart/parser.c" -> "tree_sitter_dart/parser.h";
+  "tree_sitter_dart/scanner.c" -> "tree_sitter_dart/parser.h";
 }
