@@ -15,7 +15,8 @@
   let graphContainer: HTMLDivElement;
   let graphvizReady = $state(false);
   let renderError = $state<string | null>(null);
-  let renderState = $state(createRenderState());
+  // Internal render bookkeeping; this should not participate in Svelte reactivity.
+  let renderState = createRenderState();
 
   onMount(async () => {
     try {
