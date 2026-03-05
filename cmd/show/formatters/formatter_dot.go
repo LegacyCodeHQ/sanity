@@ -179,7 +179,13 @@ func (f dotFormatter) Format(g depgraph.FileDependencyGraph, opts RenderOptions)
 				}
 			}
 
-			if cycleNodes[source] {
+			if hasFileMetadata && fileMetadata.IsPruned {
+				if cycleNodes[source] {
+					sb.WriteString(fmt.Sprintf("  %q [label=%q, style=\"filled,dashed\", fillcolor=%s, color=red];\n", sourceNodeKey, nodeLabel, color))
+				} else {
+					sb.WriteString(fmt.Sprintf("  %q [label=%q, style=\"filled,dashed\", fillcolor=%s, color=gray];\n", sourceNodeKey, nodeLabel, color))
+				}
+			} else if cycleNodes[source] {
 				sb.WriteString(fmt.Sprintf("  %q [label=%q, style=filled, fillcolor=%s, color=red];\n", sourceNodeKey, nodeLabel, color))
 			} else {
 				sb.WriteString(fmt.Sprintf("  %q [label=%q, style=filled, fillcolor=%s];\n", sourceNodeKey, nodeLabel, color))

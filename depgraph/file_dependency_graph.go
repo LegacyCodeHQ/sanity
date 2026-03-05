@@ -25,6 +25,7 @@ type FileGraphMetadata struct {
 type FileMetadata struct {
 	Stats     *vcs.FileStats
 	IsTest    bool
+	IsPruned  bool
 	Extension string
 }
 

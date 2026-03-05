@@ -36,6 +36,7 @@ type graphOptions struct {
 	targetFile   string
 	depthLevel   int
 	scope        string
+	pruneFiles   []string
 }
 
 const (
@@ -101,6 +102,7 @@ func NewCommand() *cobra.Command {
 	// Add level flag for limiting dependency depth
 	cmd.Flags().IntVarP(&opts.depthLevel, "level", "l", opts.depthLevel, "Depth level for dependencies (used with --file, 0 = unlimited)")
 	cmd.Flags().StringVar(&opts.scope, "scope", opts.scope, "Dependency scope for --file (downstream only)")
+	cmd.Flags().StringSliceVar(&opts.pruneFiles, "prune", nil, "Show node but skip its subtree (requires --file; shown with dashed border)")
 
 	return cmd
 }
@@ -163,7 +165,8 @@ func runGraph(cmd *cobra.Command, opts *graphOptions) error {
 		return fmt.Errorf("failed to build dependency graph: %w", err)
 	}
 
-	graph, filePaths, err = applyTargetFileFilter(opts, pathResolver, graph, filePaths)
+	var prunedNodes map[string]bool
+	graph, filePaths, prunedNodes, err = applyTargetFileFilter(opts, pathResolver, graph, filePaths)
 	if err != nil {
 		return err
 	}
@@ -182,6 +185,13 @@ func runGraph(cmd *cobra.Command, opts *graphOptions) error {
 	fileGraph, err := depgraph.NewFileDependencyGraph(graph, fileStats, contentReader)
 	if err != nil {
 		return fmt.Errorf("failed to build file graph metadata: %w", err)
+	}
+
+	for node := range prunedNodes {
+		if md, ok := fileGraph.Meta.Files[node]; ok {
+			md.IsPruned = true
+			fileGraph.Meta.Files[node] = md
+		}
 	}
 
 	formatter, err := formatters.NewFormatter(opts.outputFormat)
@@ -326,6 +336,10 @@ func validateGraphOptions(opts *graphOptions) error {
 		if opts.depthLevel < 0 {
 			return fmt.Errorf("--level must be at least 0")
 		}
+	}
+
+	if len(opts.pruneFiles) > 0 && opts.targetFile == "" {
+		return fmt.Errorf("--prune requires --file flag")
 	}
 
 	return nil
@@ -557,24 +571,33 @@ func selectContentReader(opts *graphOptions, toCommit string) vcs.ContentReader 
 	return vcs.FilesystemContentReader()
 }
 
-func applyTargetFileFilter(opts *graphOptions, pathResolver PathResolver, graph depgraph.DependencyGraph, filePaths []string) (depgraph.DependencyGraph, []string, error) {
+func applyTargetFileFilter(opts *graphOptions, pathResolver PathResolver, graph depgraph.DependencyGraph, filePaths []string) (depgraph.DependencyGraph, []string, map[string]bool, error) {
 	if opts.targetFile == "" {
-		return graph, filePaths, nil
+		return graph, filePaths, nil, nil
 	}
 
 	absTargetFile, err := pathResolver.Resolve(RawPath(opts.targetFile))
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to resolve file path: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to resolve file path: %w", err)
 	}
 
 	if !depgraph.ContainsNode(graph, absTargetFile.String()) {
-		return nil, nil, fmt.Errorf("file not found in graph: %s", opts.targetFile)
+		return nil, nil, nil, fmt.Errorf("file not found in graph: %s", opts.targetFile)
 	}
 
-	graph = filterGraphByLevel(graph, absTargetFile.String(), opts.depthLevel, opts.scope)
+	pruneSet := make(map[string]bool, len(opts.pruneFiles))
+	for _, pf := range opts.pruneFiles {
+		absPrunePath, err := pathResolver.Resolve(RawPath(pf))
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to resolve prune path %q: %w", pf, err)
+		}
+		pruneSet[absPrunePath.String()] = true
+	}
+
+	graph, prunedNodes := filterGraphByLevel(graph, absTargetFile.String(), opts.depthLevel, opts.scope, pruneSet)
 	filePaths = graphFiles(graph)
 
-	return graph, filePaths, nil
+	return graph, filePaths, prunedNodes, nil
 }
 
 func applyBetweenFilter(opts *graphOptions, pathResolver PathResolver, graph depgraph.DependencyGraph, filePaths []string) (depgraph.DependencyGraph, []string, error) {
@@ -942,10 +965,12 @@ func resolveAndValidatePaths(paths []string, pathResolver PathResolver, graph de
 // filterGraphByLevel filters the dependency graph to include only nodes within
 // the specified number of levels from the target file, according to scope.
 // A level of 0 means unlimited traversal depth.
-func filterGraphByLevel(graph depgraph.DependencyGraph, targetFile string, level int, scope string) depgraph.DependencyGraph {
+// Nodes in pruneSet are included in the graph but their subtrees are not traversed.
+// Returns the filtered graph and the set of pruned nodes that were actually visited.
+func filterGraphByLevel(graph depgraph.DependencyGraph, targetFile string, level int, scope string, pruneSet map[string]bool) (depgraph.DependencyGraph, map[string]bool) {
 	adjacency, err := depgraph.AdjacencyList(graph)
 	if err != nil {
-		return depgraph.NewDependencyGraph()
+		return depgraph.NewDependencyGraph(), nil
 	}
 
 	// BFS to find all nodes within the specified level (or all reachable nodes when level=0)
@@ -956,6 +981,10 @@ func filterGraphByLevel(graph depgraph.DependencyGraph, targetFile string, level
 	for l := 0; (level == 0 || l < level) && len(currentLevel) > 0; l++ {
 		nextLevel := []string{}
 		for _, file := range currentLevel {
+			// Pruned nodes stay in the graph but their subtrees are not explored.
+			if pruneSet[file] {
+				continue
+			}
 			if scope == scopeDownstream {
 				// Add direct dependencies (files this file imports).
 				for _, dep := range adjacency[file] {
@@ -982,5 +1011,13 @@ func filterGraphByLevel(graph depgraph.DependencyGraph, targetFile string, level
 		filtered[file] = filteredDeps
 	}
 
-	return depgraph.MustDependencyGraph(filtered)
+	// Collect pruned nodes that were actually visited
+	actuallyPruned := make(map[string]bool)
+	for file := range pruneSet {
+		if visited[file] {
+			actuallyPruned[file] = true
+		}
+	}
+
+	return depgraph.MustDependencyGraph(filtered), actuallyPruned
 }

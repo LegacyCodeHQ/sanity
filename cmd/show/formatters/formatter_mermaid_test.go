@@ -356,6 +356,25 @@ func TestMermaidFormatter_HighlightsAllCycleEdgesInSCC(t *testing.T) {
 	require.Contains(t, output, "linkStyle 3 stroke:#d62728")
 }
 
+func TestMermaidFormatter_PrunedNodesHaveDashedBorder(t *testing.T) {
+	graph := testFileGraphMermaid(t, map[string][]string{
+		"/project/a.go": {"/project/b.go"},
+		"/project/b.go": {},
+	}, nil)
+
+	// Mark b.go as pruned
+	md := graph.Meta.Files["/project/b.go"]
+	md.IsPruned = true
+	graph.Meta.Files["/project/b.go"] = md
+
+	formatter := mermaidFormatter{}
+	output, err := formatter.Format(graph, RenderOptions{})
+	require.NoError(t, err)
+
+	g := testhelpers.MermaidGoldie(t)
+	g.Assert(t, t.Name(), []byte(output))
+}
+
 func TestMermaidFormatter_DuplicateBaseNamesStayDistinct(t *testing.T) {
 	graph := testFileGraphMermaid(t, map[string][]string{
 		"/project/test/res.send.js":      {"/project/test/support/utils.js"},

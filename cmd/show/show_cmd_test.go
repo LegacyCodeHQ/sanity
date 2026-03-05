@@ -715,6 +715,116 @@ func TestGraphFile_InvalidScope_ReturnsError(t *testing.T) {
 	}
 }
 
+func TestGraphFile_PruneStopsTraversal(t *testing.T) {
+	repoDir := t.TempDir()
+	aFile := filepath.Join(repoDir, "a.ts")
+	bFile := filepath.Join(repoDir, "b.ts")
+	cFile := filepath.Join(repoDir, "c.ts")
+	dFile := filepath.Join(repoDir, "d.ts")
+
+	if err := os.WriteFile(aFile, []byte("import { b } from './b';\nexport const a = b;\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(bFile, []byte("import { c } from './c';\nexport const b = c;\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(cFile, []byte("import { d } from './d';\nexport const c = d;\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(dFile, []byte("export const d = 1;\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	cmd := NewCommand()
+	cmd.SetArgs([]string{
+		"-r", repoDir,
+		"-p", "a.ts",
+		"--prune", "b.ts",
+		"-l", "0",
+		"-f", "dot",
+	})
+
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("cmd.Execute() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, `"a.ts"`) {
+		t.Fatalf("expected a.ts in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, `"b.ts"`) {
+		t.Fatalf("expected pruned node b.ts to still appear in output, got:\n%s", output)
+	}
+	if strings.Contains(output, `"c.ts"`) {
+		t.Fatalf("expected c.ts (descendant of pruned b.ts) to be excluded, got:\n%s", output)
+	}
+	if strings.Contains(output, `"d.ts"`) {
+		t.Fatalf("expected d.ts (descendant of pruned b.ts) to be excluded, got:\n%s", output)
+	}
+	if !strings.Contains(output, `dashed`) {
+		t.Fatalf("expected pruned node b.ts to have dashed style, got:\n%s", output)
+	}
+}
+
+func TestGraphFile_PruneDoesNotBlockNodesReachableViaOtherPaths(t *testing.T) {
+	repoDir := t.TempDir()
+	aFile := filepath.Join(repoDir, "a.ts")
+	bFile := filepath.Join(repoDir, "b.ts")
+	cFile := filepath.Join(repoDir, "c.ts")
+	dFile := filepath.Join(repoDir, "d.ts")
+
+	// a -> b -> d, a -> c -> d. Prune b; d should still appear via c.
+	if err := os.WriteFile(aFile, []byte("import { b } from './b';\nimport { c } from './c';\nexport const a = b + c;\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(bFile, []byte("import { d } from './d';\nexport const b = d;\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(cFile, []byte("import { d } from './d';\nexport const c = d;\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(dFile, []byte("export const d = 1;\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	cmd := NewCommand()
+	cmd.SetArgs([]string{
+		"-r", repoDir,
+		"-p", "a.ts",
+		"--prune", "b.ts",
+		"-l", "0",
+		"-f", "dot",
+	})
+
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("cmd.Execute() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, `"a.ts"`) || !strings.Contains(output, `"b.ts"`) || !strings.Contains(output, `"c.ts"`) || !strings.Contains(output, `"d.ts"`) {
+		t.Fatalf("expected all four nodes (d reachable via c), got:\n%s", output)
+	}
+}
+
+func TestGraphFile_PruneWithoutFile_ReturnsError(t *testing.T) {
+	cmd := NewCommand()
+	cmd.SetArgs([]string{"--prune", "b.ts"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected error when --prune is used without --file")
+	}
+	if !strings.Contains(err.Error(), "--prune requires --file flag") {
+		t.Fatalf("expected prune requires file error, got: %v", err)
+	}
+}
+
 func TestRepoLabelName_UsesGoModuleNameWhenPresent(t *testing.T) {
 	repoDir := filepath.Join(t.TempDir(), "clarity-cli")
 	if err := os.MkdirAll(repoDir, 0o755); err != nil {

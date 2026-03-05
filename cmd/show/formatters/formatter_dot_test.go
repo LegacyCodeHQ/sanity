@@ -297,6 +297,25 @@ func TestDependencyGraph_ToDOT_HighlightsAllCycleEdgesInSCC(t *testing.T) {
 	require.Contains(t, output, "\"/project/c.go\" -> \"/project/a.go\" [color=red, style=dashed];")
 }
 
+func TestDependencyGraph_ToDOT_PrunedNodesHaveDashedBorder(t *testing.T) {
+	graph := testFileGraph(t, map[string][]string{
+		"/project/a.go": {"/project/b.go"},
+		"/project/b.go": {},
+	}, nil)
+
+	// Mark b.go as pruned
+	md := graph.Meta.Files["/project/b.go"]
+	md.IsPruned = true
+	graph.Meta.Files["/project/b.go"] = md
+
+	formatter := dotFormatter{}
+	output, err := formatter.Format(graph, RenderOptions{})
+	require.NoError(t, err)
+
+	g := testhelpers.DotGoldie(t)
+	g.Assert(t, t.Name(), []byte(output))
+}
+
 func TestDependencyGraph_ToDOT_DuplicateBaseNamesStayDistinct(t *testing.T) {
 	graph := testFileGraph(t, map[string][]string{
 		"/project/test/res.send.js":      {"/project/test/support/utils.js"},

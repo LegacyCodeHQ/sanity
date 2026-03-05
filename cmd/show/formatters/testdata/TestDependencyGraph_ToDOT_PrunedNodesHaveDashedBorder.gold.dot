@@ -1,0 +1,9 @@
+digraph dependencies {
+  rankdir=LR;
+  node [shape=box];
+
+  "/project/a.go" [label="a.go", style=filled, fillcolor=white];
+  "/project/b.go" [label="b.go", style="filled,dashed", fillcolor=white, color=gray];
+
+  "/project/a.go" -> "/project/b.go";
+}
