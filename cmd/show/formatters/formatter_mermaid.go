@@ -174,7 +174,12 @@ func (f mermaidFormatter) Format(g depgraph.FileDependencyGraph, opts RenderOpti
 			depNodeKey := nodeNames[dep]
 			depID := nodeIDs[depNodeKey]
 			hasEdges = true
-			edgesSB.WriteString(fmt.Sprintf("    %s --> %s\n", sourceID, depID))
+			if opts.EdgeLabels {
+				label := EdgeLabel(sourceNodeKey, depNodeKey)
+				edgesSB.WriteString(fmt.Sprintf("    %s -->|%s| %s\n", sourceID, label, depID))
+			} else {
+				edgesSB.WriteString(fmt.Sprintf("    %s --> %s\n", sourceID, depID))
+			}
 			edgeMD := g.Meta.Edges[depgraph.FileEdge{From: source, To: dep}]
 			if edgeMD.InCycle {
 				cycleEdgeIndices = append(cycleEdgeIndices, edgeIndex)

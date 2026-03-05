@@ -37,6 +37,7 @@ type graphOptions struct {
 	depthLevel   int
 	scope        string
 	pruneFiles   []string
+	edgeLabels   bool
 }
 
 const (
@@ -103,6 +104,7 @@ func NewCommand() *cobra.Command {
 	cmd.Flags().IntVarP(&opts.depthLevel, "level", "l", opts.depthLevel, "Depth level for dependencies (used with --file, 0 = unlimited)")
 	cmd.Flags().StringVar(&opts.scope, "scope", opts.scope, "Dependency scope for --file (downstream only)")
 	cmd.Flags().StringSliceVar(&opts.pruneFiles, "prune", nil, "Show node but skip its subtree (requires --file; shown with dashed border)")
+	cmd.Flags().BoolVar(&opts.edgeLabels, "label", false, "Add deterministic short labels to edges")
 
 	return cmd
 }
@@ -201,9 +203,10 @@ func runGraph(cmd *cobra.Command, opts *graphOptions) error {
 
 	direction, _ := formatters.ParseDirection(opts.direction)
 	renderOpts := formatters.RenderOptions{
-		Label:     label,
-		Direction: direction,
-		BasePath:  resolveRenderBasePath(opts.repoPath, filePaths),
+		Label:      label,
+		Direction:  direction,
+		BasePath:   resolveRenderBasePath(opts.repoPath, filePaths),
+		EdgeLabels: opts.edgeLabels,
 	}
 
 	output, err := formatter.Format(fileGraph, renderOpts)

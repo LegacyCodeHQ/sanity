@@ -46,4 +46,6 @@ type RenderOptions struct {
 	Direction GraphDirection
 	// BasePath is an optional filesystem base used to derive stable relative node IDs.
 	BasePath string
+	// EdgeLabels enables deterministic short labels on edges.
+	EdgeLabels bool
 }

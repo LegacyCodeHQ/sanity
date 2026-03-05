@@ -216,8 +216,16 @@ func (f dotFormatter) Format(g depgraph.FileDependencyGraph, opts RenderOptions)
 		for _, dep := range sortedDeps {
 			depNodeKey := dotNodeKey(dep, opts.BasePath)
 			edgeMD := g.Meta.Edges[depgraph.FileEdge{From: source, To: dep}]
+
+			var attrs []string
+			if opts.EdgeLabels {
+				attrs = append(attrs, fmt.Sprintf("label=%q", EdgeLabel(nodeNames[source], nodeNames[dep])))
+			}
 			if edgeMD.InCycle {
-				sb.WriteString(fmt.Sprintf("  %q -> %q [color=red, style=dashed];\n", sourceNodeKey, depNodeKey))
+				attrs = append(attrs, "color=red", "style=dashed")
+			}
+			if len(attrs) > 0 {
+				sb.WriteString(fmt.Sprintf("  %q -> %q [%s];\n", sourceNodeKey, depNodeKey, strings.Join(attrs, ", ")))
 			} else {
 				sb.WriteString(fmt.Sprintf("  %q -> %q;\n", sourceNodeKey, depNodeKey))
 			}

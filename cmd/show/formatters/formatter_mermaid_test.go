@@ -375,6 +375,21 @@ func TestMermaidFormatter_PrunedNodesHaveDashedBorder(t *testing.T) {
 	g.Assert(t, t.Name(), []byte(output))
 }
 
+func TestMermaidFormatter_EdgeLabels(t *testing.T) {
+	graph := testFileGraphMermaid(t, map[string][]string{
+		"/project/a.go": {"/project/b.go", "/project/c.go"},
+		"/project/b.go": {"/project/c.go"},
+		"/project/c.go": {},
+	}, nil)
+
+	formatter := mermaidFormatter{}
+	output, err := formatter.Format(graph, RenderOptions{EdgeLabels: true})
+	require.NoError(t, err)
+
+	g := testhelpers.MermaidGoldie(t)
+	g.Assert(t, t.Name(), []byte(output))
+}
+
 func TestMermaidFormatter_DuplicateBaseNamesStayDistinct(t *testing.T) {
 	graph := testFileGraphMermaid(t, map[string][]string{
 		"/project/test/res.send.js":      {"/project/test/support/utils.js"},

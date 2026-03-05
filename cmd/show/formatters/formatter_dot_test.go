@@ -316,6 +316,21 @@ func TestDependencyGraph_ToDOT_PrunedNodesHaveDashedBorder(t *testing.T) {
 	g.Assert(t, t.Name(), []byte(output))
 }
 
+func TestDependencyGraph_ToDOT_EdgeLabels(t *testing.T) {
+	graph := testFileGraph(t, map[string][]string{
+		"/project/a.go": {"/project/b.go", "/project/c.go"},
+		"/project/b.go": {"/project/c.go"},
+		"/project/c.go": {},
+	}, nil)
+
+	formatter := dotFormatter{}
+	output, err := formatter.Format(graph, RenderOptions{EdgeLabels: true})
+	require.NoError(t, err)
+
+	g := testhelpers.DotGoldie(t)
+	g.Assert(t, t.Name(), []byte(output))
+}
+
 func TestDependencyGraph_ToDOT_DuplicateBaseNamesStayDistinct(t *testing.T) {
 	graph := testFileGraph(t, map[string][]string{
 		"/project/test/res.send.js":      {"/project/test/support/utils.js"},
