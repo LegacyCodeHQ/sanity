@@ -3,13 +3,13 @@
   "version": "0.0.0-dev",
   "description": "Clarity CLI npm wrapper package",
   "license": "AGPL-3.0-only",
-  "homepage": "https://github.com/LegacyCodeHQ/clarity",
+  "homepage": "https://github.com/LegacyCodeHQ/clarity-cli",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/LegacyCodeHQ/clarity.git"
+    "url": "git+https://github.com/LegacyCodeHQ/clarity-cli.git"
   },
   "bugs": {
-    "url": "https://github.com/LegacyCodeHQ/clarity/issues"
+    "url": "https://github.com/LegacyCodeHQ/clarity-cli/issues"
   },
   "bin": {
     "clarity": "bin/clarity.js"

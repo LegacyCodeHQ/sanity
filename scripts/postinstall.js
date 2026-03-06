@@ -9,7 +9,7 @@ const https = require('node:https');
 const { pipeline } = require('node:stream/promises');
 
 const OWNER = 'LegacyCodeHQ';
-const REPO = 'clarity';
+const REPO = 'clarity-cli';
 const packageJson = require('../package.json');
 
 function toTarget(platform, arch) {
