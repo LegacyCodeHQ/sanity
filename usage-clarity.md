@@ -100,11 +100,15 @@ clarity show [OPTIONS]
 | `--url` | `-u` | bool | `false` | Generate visualization URL (supported formats: dot, mermaid) |
 | `--input` | `-i` | []string | `nil` | Build graph from specific files and/or directories (comma-separated) |
 | `--between` | `-w` | []string | `nil` | Find all paths between specified files (comma-separated) |
-| `--level` | `-l` | int | `opts.depthLevel` | Depth level for dependencies (used with --file) |
+| `--level` | `-l` | int | `opts.depthLevel` | Depth level for dependencies (used with --file, 0 = unlimited) |
 | `--include-ext` | | string | `""` | Include only files with these extensions (comma-separated, e.g. .go,.java) |
 | `--exclude-ext` | | string | `""` | Exclude files with these extensions (comma-separated, e.g. .go,.java) |
+| `--scope` | | string | `opts.scope` | Dependency scope for --file (downstream only) |
 | `--allow-outside-repo` | | bool | `false` | Allow input paths outside the repo root |
+| `--label` | | bool | `false` | Add deterministic short labels to edges |
 | `--exclude` | | []string | `nil` | Exclude specific files and/or directories from graph inputs (comma-separated) |
+| `--prune` | | []string | `nil` | Show node but skip its subtree (requires --file; shown with dashed border) |
+| `--also` | | []string | `nil` | Include files matching glob patterns that connect to --file graph (requires --file) |
 
 ---
 

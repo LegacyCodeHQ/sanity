@@ -38,6 +38,7 @@ type graphOptions struct {
 	depthLevel   int
 	scope        string
 	pruneFiles   []string
+	alsoPatterns []string
 	edgeLabels   bool
 }
 
@@ -105,6 +106,7 @@ func NewCommand() *cobra.Command {
 	cmd.Flags().IntVarP(&opts.depthLevel, "level", "l", opts.depthLevel, "Depth level for dependencies (used with --file, 0 = unlimited)")
 	cmd.Flags().StringVar(&opts.scope, "scope", opts.scope, "Dependency scope for --file (downstream only)")
 	cmd.Flags().StringSliceVar(&opts.pruneFiles, "prune", nil, "Show node but skip its subtree (requires --file; shown with dashed border)")
+	cmd.Flags().StringSliceVar(&opts.alsoPatterns, "also", nil, "Include files matching glob patterns that connect to --file graph (requires --file)")
 	cmd.Flags().BoolVar(&opts.edgeLabels, "label", false, "Add deterministic short labels to edges")
 
 	return cmd
@@ -168,10 +170,25 @@ func runGraph(cmd *cobra.Command, opts *graphOptions) error {
 		return fmt.Errorf("failed to build dependency graph: %w", err)
 	}
 
+	var fullAdjacency map[string][]string
+	if len(opts.alsoPatterns) > 0 {
+		fullAdjacency, err = depgraph.AdjacencyList(graph)
+		if err != nil {
+			return fmt.Errorf("failed to build adjacency list: %w", err)
+		}
+	}
+
 	var prunedNodes map[string]bool
 	graph, filePaths, prunedNodes, err = applyTargetFileFilter(opts, pathResolver, graph, filePaths)
 	if err != nil {
 		return err
+	}
+
+	if len(opts.alsoPatterns) > 0 && opts.targetFile != "" {
+		graph, filePaths, err = applyAlsoFilter(opts, pathResolver, graph, filePaths, fullAdjacency)
+		if err != nil {
+			return err
+		}
 	}
 
 	graph, filePaths, err = applyBetweenFilter(opts, pathResolver, graph, filePaths)
@@ -344,6 +361,10 @@ func validateGraphOptions(opts *graphOptions) error {
 
 	if len(opts.pruneFiles) > 0 && opts.targetFile == "" {
 		return fmt.Errorf("--prune requires --file flag")
+	}
+
+	if len(opts.alsoPatterns) > 0 && opts.targetFile == "" {
+		return fmt.Errorf("--also requires --file flag")
 	}
 
 	return nil
@@ -602,6 +623,113 @@ func applyTargetFileFilter(opts *graphOptions, pathResolver PathResolver, graph 
 	filePaths = graphFiles(graph)
 
 	return graph, filePaths, prunedNodes, nil
+}
+
+func applyAlsoFilter(opts *graphOptions, pathResolver PathResolver, graph depgraph.DependencyGraph, filePaths []string, fullAdjacency map[string][]string) (depgraph.DependencyGraph, []string, error) {
+	if len(opts.alsoPatterns) == 0 {
+		return graph, filePaths, nil
+	}
+
+	scopedNodes := make(map[string]bool, len(filePaths))
+	for _, fp := range filePaths {
+		scopedNodes[fp] = true
+	}
+
+	// Build reverse adjacency from full graph (who imports each node).
+	reverseAdj := make(map[string][]string, len(fullAdjacency))
+	for source, deps := range fullAdjacency {
+		for _, dep := range deps {
+			reverseAdj[dep] = append(reverseAdj[dep], source)
+		}
+	}
+
+	baseDir := pathResolver.BaseDir()
+
+	// Find candidate files from full graph that match patterns.
+	candidates := make(map[string]bool)
+	for node := range fullAdjacency {
+		if scopedNodes[node] {
+			continue
+		}
+		relPath, err := filepath.Rel(baseDir, node)
+		if err != nil {
+			continue
+		}
+		for _, pattern := range opts.alsoPatterns {
+			if matchAlsoPattern(pattern, relPath) {
+				candidates[node] = true
+				break
+			}
+		}
+	}
+
+	// Keep only candidates connected to the scoped graph.
+	connected := make(map[string]bool)
+	for candidate := range candidates {
+		for _, dep := range fullAdjacency[candidate] {
+			if scopedNodes[dep] {
+				connected[candidate] = true
+				break
+			}
+		}
+		if connected[candidate] {
+			continue
+		}
+		for _, source := range reverseAdj[candidate] {
+			if scopedNodes[source] {
+				connected[candidate] = true
+				break
+			}
+		}
+	}
+
+	if len(connected) == 0 {
+		return graph, filePaths, nil
+	}
+
+	// Merge connected nodes into the scoped graph.
+	allNodes := make(map[string]bool, len(scopedNodes)+len(connected))
+	for n := range scopedNodes {
+		allNodes[n] = true
+	}
+	for n := range connected {
+		allNodes[n] = true
+	}
+
+	merged := make(map[string][]string, len(allNodes))
+	for node := range allNodes {
+		var deps []string
+		for _, dep := range fullAdjacency[node] {
+			if allNodes[dep] {
+				deps = append(deps, dep)
+			}
+		}
+		merged[node] = deps
+	}
+
+	newGraph, err := depgraph.NewDependencyGraphFromAdjacency(merged)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to build merged graph: %w", err)
+	}
+
+	newFilePaths := make([]string, 0, len(merged))
+	for f := range merged {
+		newFilePaths = append(newFilePaths, f)
+	}
+
+	return newGraph, newFilePaths, nil
+}
+
+// matchAlsoPattern matches a glob pattern against a file path.
+// If the pattern contains a path separator, it matches against the full relative path.
+// Otherwise, it matches against the basename only (so *.test.ts matches at any depth).
+func matchAlsoPattern(pattern, relPath string) bool {
+	if strings.ContainsRune(pattern, filepath.Separator) || strings.Contains(pattern, "/") {
+		matched, _ := filepath.Match(pattern, relPath)
+		return matched
+	}
+	matched, _ := filepath.Match(pattern, filepath.Base(relPath))
+	return matched
 }
 
 func applyBetweenFilter(opts *graphOptions, pathResolver PathResolver, graph depgraph.DependencyGraph, filePaths []string) (depgraph.DependencyGraph, []string, error) {

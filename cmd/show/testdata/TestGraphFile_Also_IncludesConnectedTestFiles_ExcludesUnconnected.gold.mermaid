@@ -1,0 +1,14 @@
+flowchart LR
+    n0["a.test.ts"]
+    n1["a.ts"]
+    n2["b.test.ts"]
+    n3["b.ts"]
+    n4["c.ts"]
+
+    n0 --> n1
+    n1 --> n3
+    n2 --> n3
+    n3 --> n4
+
+    classDef testFile fill:#90EE90,stroke:#228B22,color:#000000
+    class n0,n2 testFile

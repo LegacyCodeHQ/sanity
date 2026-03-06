@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/LegacyCodeHQ/clarity/cmd/show/formatters"
+	"github.com/LegacyCodeHQ/clarity/internal/testhelpers"
 )
 
 func TestGraphInputDirectory_WithJavaFiles_RendersDependencyEdges(t *testing.T) {
@@ -886,6 +887,224 @@ func gitInitRepo(t *testing.T, repoDir string) {
 	gitRun(t, repoDir, "init")
 	gitRun(t, repoDir, "config", "user.name", "test")
 	gitRun(t, repoDir, "config", "user.email", "test@example.com")
+}
+
+func TestGraphFile_Also_IncludesConnectedTestFile(t *testing.T) {
+	repoDir := t.TempDir()
+	aFile := filepath.Join(repoDir, "a.ts")
+	bFile := filepath.Join(repoDir, "b.ts")
+	testFile := filepath.Join(repoDir, "a.test.ts")
+
+	// a imports b; a.test.ts imports a
+	if err := os.WriteFile(aFile, []byte("import { b } from './b';\nexport const a = b;\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(bFile, []byte("export const b = 1;\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(testFile, []byte("import { a } from './a';\nconsole.log(a);\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	cmd := NewCommand()
+	cmd.SetArgs([]string{
+		"-r", repoDir,
+		"-p", "a.ts",
+		"-l", "0",
+		"--also", "*.test.ts",
+		"-f", "dot",
+	})
+
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("cmd.Execute() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, `"a.ts"`) {
+		t.Fatalf("expected a.ts in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, `"b.ts"`) {
+		t.Fatalf("expected b.ts in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, `"a.test.ts"`) {
+		t.Fatalf("expected a.test.ts in output (connected via import), got:\n%s", output)
+	}
+	if !strings.Contains(output, `a.test.ts" -> "`) {
+		t.Fatalf("expected edge from a.test.ts, got:\n%s", output)
+	}
+}
+
+func TestGraphFile_Also_ExcludesUnconnectedFiles(t *testing.T) {
+	repoDir := t.TempDir()
+	aFile := filepath.Join(repoDir, "a.ts")
+	bFile := filepath.Join(repoDir, "b.ts")
+	isolatedTest := filepath.Join(repoDir, "z.test.ts")
+
+	// a imports b; z.test.ts has no connection to a or b
+	if err := os.WriteFile(aFile, []byte("import { b } from './b';\nexport const a = b;\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(bFile, []byte("export const b = 1;\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(isolatedTest, []byte("export const z = 42;\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	cmd := NewCommand()
+	cmd.SetArgs([]string{
+		"-r", repoDir,
+		"-p", "a.ts",
+		"-l", "0",
+		"--also", "*.test.ts",
+		"-f", "dot",
+	})
+
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("cmd.Execute() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, `"a.ts"`) {
+		t.Fatalf("expected a.ts in output, got:\n%s", output)
+	}
+	if strings.Contains(output, `"z.test.ts"`) {
+		t.Fatalf("expected z.test.ts to be excluded (no connection), got:\n%s", output)
+	}
+}
+
+func TestGraphFile_Also_WithoutFile_ReturnsError(t *testing.T) {
+	cmd := NewCommand()
+	cmd.SetArgs([]string{"--also", "*.test.ts"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected error when --also is used without --file")
+	}
+	if !strings.Contains(err.Error(), "--also requires --file flag") {
+		t.Fatalf("expected also requires file error, got: %v", err)
+	}
+}
+
+func TestGraphFile_Also_MultiplePatterns(t *testing.T) {
+	repoDir := t.TempDir()
+	aFile := filepath.Join(repoDir, "a.ts")
+	testFile := filepath.Join(repoDir, "a.test.ts")
+	specFile := filepath.Join(repoDir, "a.spec.ts")
+
+	if err := os.WriteFile(aFile, []byte("export const a = 1;\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(testFile, []byte("import { a } from './a';\nconsole.log(a);\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(specFile, []byte("import { a } from './a';\nconsole.log(a);\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	cmd := NewCommand()
+	cmd.SetArgs([]string{
+		"-r", repoDir,
+		"-p", "a.ts",
+		"-l", "0",
+		"--also", "*.test.ts,*.spec.ts",
+		"-f", "dot",
+	})
+
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("cmd.Execute() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, `"a.test.ts"`) {
+		t.Fatalf("expected a.test.ts in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, `"a.spec.ts"`) {
+		t.Fatalf("expected a.spec.ts in output, got:\n%s", output)
+	}
+}
+
+func TestGraphFile_Also_IncludesConnectedTestFiles_ExcludesUnconnected(t *testing.T) {
+	repoDir := t.TempDir()
+
+	// a → b → c (downstream chain)
+	// a.test.ts → a (connected test)
+	// b.test.ts → b (connected test)
+	// z.test.ts (isolated, no imports)
+	writeFile := func(name, content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(repoDir, name), []byte(content), 0o644); err != nil {
+			t.Fatalf("os.WriteFile() error = %v", err)
+		}
+	}
+	writeFile("a.ts", "import { b } from './b';\nexport const a = b;\n")
+	writeFile("b.ts", "import { c } from './c';\nexport const b = c;\n")
+	writeFile("c.ts", "export const c = 1;\n")
+	writeFile("a.test.ts", "import { a } from './a';\nconsole.log(a);\n")
+	writeFile("b.test.ts", "import { b } from './b';\nconsole.log(b);\n")
+	writeFile("z.test.ts", "export const z = 42;\n")
+
+	cmd := NewCommand()
+	cmd.SetArgs([]string{
+		"-r", repoDir,
+		"-p", "a.ts",
+		"-l", "0",
+		"--also", "*.test.ts",
+		"-f", "mermaid",
+	})
+
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("cmd.Execute() error = %v", err)
+	}
+
+	g := testhelpers.MermaidGoldie(t)
+	g.Assert(t, t.Name(), []byte(strings.TrimSpace(stdout.String())))
+}
+
+func TestGraphFile_Also_NoMatches_ReturnsOriginalGraph(t *testing.T) {
+	repoDir := t.TempDir()
+	aFile := filepath.Join(repoDir, "a.ts")
+	bFile := filepath.Join(repoDir, "b.ts")
+
+	if err := os.WriteFile(aFile, []byte("import { b } from './b';\nexport const a = b;\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(bFile, []byte("export const b = 1;\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	cmd := NewCommand()
+	cmd.SetArgs([]string{
+		"-r", repoDir,
+		"-p", "a.ts",
+		"-l", "0",
+		"--also", "*.test.ts",
+		"-f", "dot",
+	})
+
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("cmd.Execute() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, `"a.ts"`) || !strings.Contains(output, `"b.ts"`) {
+		t.Fatalf("expected original graph nodes a.ts and b.ts, got:\n%s", output)
+	}
 }
 
 func gitRun(t *testing.T, repoDir string, args ...string) {
