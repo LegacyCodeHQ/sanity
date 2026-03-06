@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -868,6 +869,7 @@ func isPathExcluded(filePath string, excludedPaths []string) bool {
 
 // expandPaths expands file paths and directories into individual file paths.
 // Directories are recursively walked and regular files are included based on includeUnsupportedFiles.
+// For directories inside a git repository, git ls-files is used to respect .gitignore rules.
 func expandPaths(paths []string, includeUnsupportedFiles bool) ([]string, error) {
 	var result []string
 
@@ -878,31 +880,24 @@ func expandPaths(paths []string, includeUnsupportedFiles bool) ([]string, error)
 		}
 
 		if info.IsDir() {
-			// Recursively walk directory and collect supported files
-			err := filepath.Walk(path, func(filePath string, fileInfo os.FileInfo, walkErr error) error {
-				if walkErr != nil {
-					return walkErr
-				}
-
-				// Skip directories themselves
-				if fileInfo.IsDir() {
-					return nil
-				}
-
-				if includeUnsupportedFiles {
-					result = append(result, filePath)
-					return nil
-				}
-
-				ext := filepath.Ext(filePath)
-				if registry.IsSupportedLanguageExtension(ext) {
-					result = append(result, filePath)
-				}
-
-				return nil
-			})
+			files, err := listGitFiles(path)
 			if err != nil {
-				return nil, fmt.Errorf("failed to walk directory %s: %w", path, err)
+				// Not a git repo or git not available; fall back to walk
+				files, err = walkDirectoryFiles(path)
+				if err != nil {
+					return nil, fmt.Errorf("failed to walk directory %s: %w", path, err)
+				}
+			}
+
+			for _, f := range files {
+				if includeUnsupportedFiles {
+					result = append(result, f)
+					continue
+				}
+				ext := filepath.Ext(f)
+				if registry.IsSupportedLanguageExtension(ext) {
+					result = append(result, f)
+				}
 			}
 		} else {
 			// Regular file - include it directly
@@ -911,6 +906,82 @@ func expandPaths(paths []string, includeUnsupportedFiles bool) ([]string, error)
 	}
 
 	return result, nil
+}
+
+// listGitFiles returns absolute paths for all non-ignored files in a git repository,
+// including files inside submodules. It combines tracked files (--recurse-submodules)
+// with untracked but non-ignored files (--others --exclude-standard).
+func listGitFiles(dir string) ([]string, error) {
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	tracked, err := gitLsFiles(absDir, "--cached", "--recurse-submodules")
+	if err != nil {
+		return nil, err
+	}
+
+	untracked, err := gitLsFiles(absDir, "--others", "--exclude-standard")
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]string, 0, len(tracked)+len(untracked))
+	for _, rel := range append(tracked, untracked...) {
+		result = append(result, filepath.Join(absDir, rel))
+	}
+	return result, nil
+}
+
+func gitLsFiles(dir string, args ...string) ([]string, error) {
+	cmdArgs := append([]string{"ls-files", "-z"}, args...)
+	cmd := exec.Command("git", cmdArgs...)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var paths []string
+	for _, part := range strings.Split(string(out), "\x00") {
+		p := strings.TrimSpace(part)
+		if p != "" {
+			paths = append(paths, p)
+		}
+	}
+	return paths, nil
+}
+
+var walkSkippedDirs = map[string]bool{
+	".git":         true,
+	"node_modules": true,
+	"target":       true,
+	".dart_tool":   true,
+	"build":        true,
+	"__pycache__":  true,
+	".gradle":      true,
+	".idea":        true,
+	".vscode":      true,
+}
+
+// walkDirectoryFiles is a fallback for non-git directories.
+func walkDirectoryFiles(dir string) ([]string, error) {
+	var result []string
+	err := filepath.Walk(dir, func(filePath string, fileInfo os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if fileInfo.IsDir() {
+			if walkSkippedDirs[fileInfo.Name()] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		result = append(result, filePath)
+		return nil
+	})
+	return result, err
 }
 
 func emitUnsupportedFileWarning(filePaths []string) {
