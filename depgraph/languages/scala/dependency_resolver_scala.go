@@ -3,6 +3,7 @@ package scala
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/LegacyCodeHQ/clarity/vcs"
 )
@@ -220,7 +221,10 @@ func resolveScalaSamePackageDependencies(
 		}
 		files, ok := typeIndex[ref]
 		if !ok {
-			continue
+			files = resolveAncestorPackageType(ref, pkg, packageTypeIndex)
+			if len(files) == 0 {
+				continue
+			}
 		}
 		for _, depFile := range files {
 			if depFile == sourceFile || !suppliedFiles[depFile] || seen[depFile] {
@@ -232,4 +236,44 @@ func resolveScalaSamePackageDependencies(
 	}
 
 	return deps
+}
+
+func resolveAncestorPackageType(
+	typeName string,
+	pkg string,
+	packageTypeIndex map[string]map[string][]string,
+) []string {
+	candidates := []string{}
+	seen := make(map[string]bool)
+
+	for parent := parentPackage(pkg); parent != ""; parent = parentPackage(parent) {
+		typeMap, ok := packageTypeIndex[parent]
+		if !ok {
+			continue
+		}
+		files := typeMap[typeName]
+		if len(files) != 1 {
+			continue
+		}
+		file := files[0]
+		if seen[file] {
+			continue
+		}
+		seen[file] = true
+		candidates = append(candidates, file)
+	}
+
+	if len(candidates) == 1 {
+		return candidates
+	}
+
+	return nil
+}
+
+func parentPackage(pkg string) string {
+	idx := strings.LastIndex(pkg, ".")
+	if idx <= 0 {
+		return ""
+	}
+	return pkg[:idx]
 }

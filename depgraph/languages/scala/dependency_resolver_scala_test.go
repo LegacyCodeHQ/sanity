@@ -243,3 +243,41 @@ trait SortedMapInstances
 	require.NoError(t, err)
 	assert.Contains(t, imports, packageObjectPath, "wildcard cats import should resolve to package object cats")
 }
+
+func TestResolveScalaProjectImports_ResolvesParentPackageTypeReference(t *testing.T) {
+	tmpDir := t.TempDir()
+	lawsDir := filepath.Join(tmpDir, "kernel-laws", "shared", "src", "main", "scala", "cats", "kernel", "laws")
+	disciplineDir := filepath.Join(lawsDir, "discipline")
+	require.NoError(t, os.MkdirAll(lawsDir, 0o755))
+	require.NoError(t, os.MkdirAll(disciplineDir, 0o755))
+
+	orderLawsPath := filepath.Join(lawsDir, "OrderLaws.scala")
+	require.NoError(t, os.WriteFile(orderLawsPath, []byte(`package cats.kernel
+package laws
+
+trait OrderLaws[A]
+`), 0o644))
+
+	orderTestsPath := filepath.Join(disciplineDir, "OrderTests.scala")
+	require.NoError(t, os.WriteFile(orderTestsPath, []byte(`package cats
+package kernel
+package laws
+package discipline
+
+trait OrderTests[A] {
+  def laws: OrderLaws[A]
+}
+`), 0o644))
+
+	reader := vcs.FilesystemContentReader()
+	files := []string{orderLawsPath, orderTestsPath}
+	pkgIndex, typeIndex, filePackages := BuildScalaIndices(files, reader)
+	supplied := map[string]bool{
+		orderLawsPath:  true,
+		orderTestsPath: true,
+	}
+
+	imports, err := ResolveScalaProjectImports(orderTestsPath, orderTestsPath, pkgIndex, typeIndex, filePackages, supplied, reader)
+	require.NoError(t, err)
+	assert.Contains(t, imports, orderLawsPath, "reference to parent-package type should resolve")
+}
