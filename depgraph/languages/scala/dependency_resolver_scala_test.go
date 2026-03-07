@@ -78,3 +78,134 @@ class PaymentMethod
 	require.NoError(t, err)
 	assert.Contains(t, imports, paymentPath)
 }
+
+func TestResolveScalaProjectImports_DoesNotLinkToSplitPackageTestFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	mainDir := filepath.Join(tmpDir, "core", "src", "main", "scala", "cats", "instances")
+	kernelMainDir := filepath.Join(tmpDir, "kernel", "src", "main", "scala", "cats", "kernel")
+	kernelTestDir := filepath.Join(tmpDir, "kernel-laws", "shared", "src", "test", "scala", "cats", "kernel", "laws")
+	require.NoError(t, os.MkdirAll(mainDir, 0o755))
+	require.NoError(t, os.MkdirAll(kernelMainDir, 0o755))
+	require.NoError(t, os.MkdirAll(kernelTestDir, 0o755))
+
+	sortedMapPath := filepath.Join(mainDir, "sortedMap.scala")
+	require.NoError(t, os.WriteFile(sortedMapPath, []byte(`package cats.instances
+
+import cats.kernel.{CommutativeMonoid, CommutativeSemigroup}
+
+trait SortedMapInstances
+`), 0o644))
+
+	// Intentionally no top-level CommutativeMonoid/Semigroup declarations so
+	// resolver fallback is exercised for cats.kernel imports.
+	kernelPackagePath := filepath.Join(kernelMainDir, "package.scala")
+	require.NoError(t, os.WriteFile(kernelPackagePath, []byte(`package cats.kernel
+
+object Placeholder
+`), 0o644))
+
+	lawTestsPath := filepath.Join(kernelTestDir, "LawTests.scala")
+	require.NoError(t, os.WriteFile(lawTestsPath, []byte(`package cats.kernel
+package laws
+
+object KernelCheck
+`), 0o644))
+
+	reader := vcs.FilesystemContentReader()
+	files := []string{sortedMapPath, kernelPackagePath, lawTestsPath}
+	pkgIndex, typeIndex, filePackages := BuildScalaIndices(files, reader)
+	supplied := map[string]bool{
+		sortedMapPath:     true,
+		kernelPackagePath: true,
+		lawTestsPath:      true,
+	}
+
+	imports, err := ResolveScalaProjectImports(sortedMapPath, sortedMapPath, pkgIndex, typeIndex, filePackages, supplied, reader)
+	require.NoError(t, err)
+	assert.NotContains(t, imports, lawTestsPath, "production file should not depend on split-package test file")
+}
+
+func TestResolveScalaProjectImports_DoesNotFanOutToPackageOnUnresolvedImportSymbols(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataDir := filepath.Join(tmpDir, "core", "src", "main", "scala", "cats", "data")
+	instancesDir := filepath.Join(tmpDir, "core", "src", "main", "scala", "cats", "instances")
+	require.NoError(t, os.MkdirAll(dataDir, 0o755))
+	require.NoError(t, os.MkdirAll(instancesDir, 0o755))
+
+	sortedMapPath := filepath.Join(instancesDir, "sortedMap.scala")
+	require.NoError(t, os.WriteFile(sortedMapPath, []byte(`package cats.instances
+
+import cats.data.{Chain, Ior}
+
+trait SortedMapInstances
+`), 0o644))
+
+	nonEmptyListPath := filepath.Join(dataDir, "NonEmptyList.scala")
+	require.NoError(t, os.WriteFile(nonEmptyListPath, []byte(`package cats.data
+
+final case class NonEmptyList[A](head: A)
+`), 0o644))
+
+	nonEmptyVectorPath := filepath.Join(dataDir, "NonEmptyVector.scala")
+	require.NoError(t, os.WriteFile(nonEmptyVectorPath, []byte(`package cats.data
+
+final case class NonEmptyVector[A](value: Vector[A])
+`), 0o644))
+
+	nonEmptyLazyListPath := filepath.Join(dataDir, "NonEmptyLazyList.scala")
+	require.NoError(t, os.WriteFile(nonEmptyLazyListPath, []byte(`package cats.data
+
+final case class NonEmptyLazyList[A](value: LazyList[A])
+`), 0o644))
+
+	reader := vcs.FilesystemContentReader()
+	files := []string{sortedMapPath, nonEmptyListPath, nonEmptyVectorPath, nonEmptyLazyListPath}
+	pkgIndex, typeIndex, filePackages := BuildScalaIndices(files, reader)
+	supplied := map[string]bool{
+		sortedMapPath:        true,
+		nonEmptyListPath:     true,
+		nonEmptyVectorPath:   true,
+		nonEmptyLazyListPath: true,
+	}
+
+	imports, err := ResolveScalaProjectImports(sortedMapPath, sortedMapPath, pkgIndex, typeIndex, filePackages, supplied, reader)
+	require.NoError(t, err)
+	assert.NotContains(t, imports, nonEmptyListPath, "should not link unrelated cats.data file on unresolved symbol")
+	assert.NotContains(t, imports, nonEmptyVectorPath, "should not link unrelated cats.data file on unresolved symbol")
+	assert.NotContains(t, imports, nonEmptyLazyListPath, "should not link unrelated cats.data file on unresolved symbol")
+}
+
+func TestResolveScalaProjectImports_DoesNotLinkToUnrelatedPackageFileWhenImportUnresolved(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataDir := filepath.Join(tmpDir, "core", "src", "main", "scala", "cats", "data")
+	instancesDir := filepath.Join(tmpDir, "core", "src", "main", "scala", "cats", "instances")
+	require.NoError(t, os.MkdirAll(dataDir, 0o755))
+	require.NoError(t, os.MkdirAll(instancesDir, 0o755))
+
+	nonEmptyListPath := filepath.Join(dataDir, "NonEmptyList.scala")
+	require.NoError(t, os.WriteFile(nonEmptyListPath, []byte(`package cats.data
+
+import cats.instances.StaticMethods
+
+final case class NonEmptyList[A](head: A)
+`), 0o644))
+
+	// No StaticMethods declaration is present in this input set.
+	sortedMapPath := filepath.Join(instancesDir, "sortedMap.scala")
+	require.NoError(t, os.WriteFile(sortedMapPath, []byte(`package cats.instances
+
+trait SortedMapInstances
+`), 0o644))
+
+	reader := vcs.FilesystemContentReader()
+	files := []string{nonEmptyListPath, sortedMapPath}
+	pkgIndex, typeIndex, filePackages := BuildScalaIndices(files, reader)
+	supplied := map[string]bool{
+		nonEmptyListPath: true,
+		sortedMapPath:    true,
+	}
+
+	imports, err := ResolveScalaProjectImports(nonEmptyListPath, nonEmptyListPath, pkgIndex, typeIndex, filePackages, supplied, reader)
+	require.NoError(t, err)
+	assert.NotContains(t, imports, sortedMapPath, "should not link arbitrary package peer when imported symbol cannot be resolved")
+}

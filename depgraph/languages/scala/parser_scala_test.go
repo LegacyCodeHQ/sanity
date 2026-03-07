@@ -15,6 +15,27 @@ class App
 	assert.Equal(t, "com.example.core", ParsePackageDeclaration(src))
 }
 
+func TestParsePackageDeclaration_SplitPackageClauses(t *testing.T) {
+	src := []byte(`package cats.kernel
+package laws
+
+object KernelCheck
+`)
+	assert.Equal(t, "cats.kernel.laws", ParsePackageDeclaration(src))
+}
+
+func TestParsePackageDeclaration_SplitPackageClausesWithHeaderComment(t *testing.T) {
+	src := []byte(`/*
+ * Header comment
+ */
+package cats.kernel
+package laws
+
+object KernelCheck
+`)
+	assert.Equal(t, "cats.kernel.laws", ParsePackageDeclaration(src))
+}
+
 func TestParseScalaImports_ClassifiesInternalAndStandard(t *testing.T) {
 	src := []byte(`package com.example
 

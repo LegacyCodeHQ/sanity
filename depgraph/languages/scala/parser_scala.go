@@ -85,7 +85,48 @@ func ParsePackageDeclaration(sourceCode []byte) string {
 	}
 	defer tree.Close()
 
-	node := findFirstNodeOfType(tree.RootNode(), "package_clause")
+	root := tree.RootNode()
+	parts := []string{}
+	seenPackageClause := false
+	for i := 0; i < int(root.NamedChildCount()); i++ {
+		child := root.NamedChild(i)
+		if child == nil {
+			continue
+		}
+
+		if child.Type() == "comment" {
+			// Allow leading/mid package doc comments.
+			continue
+		}
+
+		// Scala allows split package declarations:
+		//   package a
+		//   package b
+		// which should resolve to package a.b
+		if child.Type() != "package_clause" {
+			if !seenPackageClause {
+				continue
+			}
+			break
+		}
+		seenPackageClause = true
+
+		pkg := findFirstNodeOfType(child, "package_identifier")
+		if pkg == nil {
+			continue
+		}
+		content := strings.TrimSpace(pkg.Content(sourceCode))
+		if content == "" {
+			continue
+		}
+		parts = append(parts, content)
+	}
+
+	if len(parts) > 0 {
+		return strings.Join(parts, ".")
+	}
+
+	node := findFirstNodeOfType(root, "package_clause")
 	if node == nil {
 		return ""
 	}

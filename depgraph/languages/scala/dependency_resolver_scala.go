@@ -98,7 +98,6 @@ func ResolveScalaProjectImports(
 		projectImports = append(projectImports, resolveScalaImportPath(
 			absPath,
 			internalImp,
-			scalaPackageIndex,
 			scalaPackageTypes,
 			suppliedFiles,
 			typeReferences,
@@ -120,7 +119,6 @@ func ResolveScalaProjectImports(
 func resolveScalaImportPath(
 	sourceFile string,
 	imp InternalImport,
-	packageIndex map[string][]string,
 	packageTypeIndex map[string]map[string][]string,
 	suppliedFiles map[string]bool,
 	typeReferences []string,
@@ -160,12 +158,6 @@ func resolveScalaImportPath(
 			for _, file := range typeMap[typeName] {
 				addFile(file)
 			}
-		}
-	}
-
-	if len(resolved) == 0 {
-		for _, file := range packageIndex[pkg] {
-			addFile(file)
 		}
 	}
 
