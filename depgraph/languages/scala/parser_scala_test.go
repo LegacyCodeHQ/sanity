@@ -36,6 +36,15 @@ object KernelCheck
 	assert.Equal(t, "cats.kernel.laws", ParsePackageDeclaration(src))
 }
 
+func TestParsePackageDeclaration_PackageObject(t *testing.T) {
+	src := []byte(`package object cats {
+  type Id[A] = A
+}
+`)
+	assert.Equal(t, "cats", ParsePackageDeclaration(src))
+	assert.True(t, IsPackageObject(src))
+}
+
 func TestParseScalaImports_ClassifiesInternalAndStandard(t *testing.T) {
 	src := []byte(`package com.example
 

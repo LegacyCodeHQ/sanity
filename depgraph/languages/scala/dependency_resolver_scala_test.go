@@ -209,3 +209,37 @@ trait SortedMapInstances
 	require.NoError(t, err)
 	assert.NotContains(t, imports, sortedMapPath, "should not link arbitrary package peer when imported symbol cannot be resolved")
 }
+
+func TestResolveScalaProjectImports_WildcardPackageImportResolvesToPackageObject(t *testing.T) {
+	tmpDir := t.TempDir()
+	instancesDir := filepath.Join(tmpDir, "core", "src", "main", "scala", "cats", "instances")
+	rootCatsDir := filepath.Join(tmpDir, "core", "src", "main", "scala", "cats")
+	require.NoError(t, os.MkdirAll(instancesDir, 0o755))
+	require.NoError(t, os.MkdirAll(rootCatsDir, 0o755))
+
+	sortedMapPath := filepath.Join(instancesDir, "sortedMap.scala")
+	require.NoError(t, os.WriteFile(sortedMapPath, []byte(`package cats.instances
+
+import cats.*
+
+trait SortedMapInstances
+`), 0o644))
+
+	packageObjectPath := filepath.Join(rootCatsDir, "package.scala")
+	require.NoError(t, os.WriteFile(packageObjectPath, []byte(`package object cats {
+  type Id[A] = A
+}
+`), 0o644))
+
+	reader := vcs.FilesystemContentReader()
+	files := []string{sortedMapPath, packageObjectPath}
+	pkgIndex, typeIndex, filePackages := BuildScalaIndices(files, reader)
+	supplied := map[string]bool{
+		sortedMapPath:     true,
+		packageObjectPath: true,
+	}
+
+	imports, err := ResolveScalaProjectImports(sortedMapPath, sortedMapPath, pkgIndex, typeIndex, filePackages, supplied, reader)
+	require.NoError(t, err)
+	assert.Contains(t, imports, packageObjectPath, "wildcard cats import should resolve to package object cats")
+}

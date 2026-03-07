@@ -77,6 +77,8 @@ var scalaTopLevelDeclarationTypes = map[string]bool{
 	"enum_definition":   true,
 }
 
+const packageObjectTypeName = "__scala_package_object__"
+
 // ParsePackageDeclaration extracts the Scala package from source code.
 func ParsePackageDeclaration(sourceCode []byte) string {
 	tree, err := parseScala(sourceCode)
@@ -88,6 +90,7 @@ func ParsePackageDeclaration(sourceCode []byte) string {
 	root := tree.RootNode()
 	parts := []string{}
 	seenPackageClause := false
+	packageObjectName := ""
 	for i := 0; i < int(root.NamedChildCount()); i++ {
 		child := root.NamedChild(i)
 		if child == nil {
@@ -103,6 +106,13 @@ func ParsePackageDeclaration(sourceCode []byte) string {
 		//   package a
 		//   package b
 		// which should resolve to package a.b
+		if child.Type() == "package_object" {
+			if name := findFirstChildOfType(child, "identifier"); name != nil {
+				packageObjectName = strings.TrimSpace(name.Content(sourceCode))
+			}
+			break
+		}
+
 		if child.Type() != "package_clause" {
 			if !seenPackageClause {
 				continue
@@ -122,6 +132,14 @@ func ParsePackageDeclaration(sourceCode []byte) string {
 		parts = append(parts, content)
 	}
 
+	if packageObjectName != "" {
+		if len(parts) > 0 {
+			parts = append(parts, packageObjectName)
+			return strings.Join(parts, ".")
+		}
+		return packageObjectName
+	}
+
 	if len(parts) > 0 {
 		return strings.Join(parts, ".")
 	}
@@ -137,6 +155,17 @@ func ParsePackageDeclaration(sourceCode []byte) string {
 	}
 
 	return strings.TrimSpace(pkg.Content(sourceCode))
+}
+
+// IsPackageObject reports whether this source declares a Scala package object.
+func IsPackageObject(sourceCode []byte) bool {
+	tree, err := parseScala(sourceCode)
+	if err != nil {
+		return false
+	}
+	defer tree.Close()
+
+	return findFirstNodeOfType(tree.RootNode(), "package_object") != nil
 }
 
 // ParseTopLevelTypeNames extracts declared top-level type names from Scala source code.

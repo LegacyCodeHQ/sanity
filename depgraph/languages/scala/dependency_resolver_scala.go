@@ -40,6 +40,9 @@ func BuildScalaIndices(
 		packageToFiles[pkg] = append(packageToFiles[pkg], absPath)
 
 		declaredTypes := ParseTopLevelTypeNames(content)
+		if IsPackageObject(content) {
+			declaredTypes = append(declaredTypes, packageObjectTypeName)
+		}
 		if len(declaredTypes) == 0 {
 			continue
 		}
@@ -148,6 +151,10 @@ func resolveScalaImportPath(
 			for _, file := range typeMap[ref] {
 				addFile(file)
 			}
+		}
+		// package object definitions are brought into scope by wildcard package imports.
+		for _, file := range typeMap[packageObjectTypeName] {
+			addFile(file)
 		}
 		return resolved
 	}
