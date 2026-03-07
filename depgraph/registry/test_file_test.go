@@ -124,6 +124,16 @@ func TestIsTestFile(t *testing.T) {
 			want:     false,
 		},
 		{
+			name:     "scala test file suffix",
+			filePath: "/project/src/test/scala/com/example/AppTest.scala",
+			want:     true,
+		},
+		{
+			name:     "scala non-test file",
+			filePath: "/project/src/main/scala/com/example/App.scala",
+			want:     false,
+		},
+		{
 			name:     "svelte test file",
 			filePath: "/project/src/App.test.svelte",
 			want:     true,
