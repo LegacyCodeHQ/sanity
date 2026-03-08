@@ -32,6 +32,44 @@ type GoExportInfo struct {
 // GoPackageExportIndex maps exported symbols to their defining files within a package directory
 type GoPackageExportIndex map[string][]string // symbol name -> list of files defining it
 
+// AnalyzeGoFileFromContent parses a Go file once and extracts import paths,
+// embed directives, and export/import-usage metadata.
+func AnalyzeGoFileFromContent(filePath string, content []byte) ([]GoImport, []GoEmbed, *GoExportInfo, error) {
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, filePath, content, parser.ParseComments)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	imports := make([]GoImport, 0, len(node.Imports))
+	for _, imp := range node.Imports {
+		importPath := strings.Trim(imp.Path.Value, "\"")
+		imports = append(imports, classifyGoImport(importPath))
+	}
+
+	var embeds []GoEmbed
+	for _, group := range node.Comments {
+		for _, comment := range group.List {
+			content := strings.TrimSpace(comment.Text)
+			if !strings.HasPrefix(content, "//go:embed ") {
+				continue
+			}
+			patterns := strings.TrimPrefix(content, "//go:embed ")
+			for _, pattern := range strings.Fields(patterns) {
+				pattern = strings.TrimPrefix(pattern, "all:")
+				embeds = append(embeds, GoEmbed{Pattern: pattern})
+			}
+		}
+	}
+
+	exportInfo, err := extractExportInfoFromAST(filePath, node)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return imports, embeds, exportInfo, nil
+}
+
 // ExtractGoSymbols analyzes a Go file and extracts defined and referenced symbols
 func ExtractGoSymbols(filePath string) (*GoSymbolInfo, error) {
 	fset := token.NewFileSet()

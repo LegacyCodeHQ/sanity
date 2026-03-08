@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/LegacyCodeHQ/clarity/vcs"
 )
@@ -15,6 +16,14 @@ type ProjectImportResolver struct {
 	goPackageExportIndices map[string]GoPackageExportIndex
 	suppliedFiles          map[string]bool
 	contentReader          vcs.ContentReader
+	moduleRootCache        sync.Map // source dir -> module root (or "")
+	moduleInfoCache        sync.Map // module root -> goModuleInfo
+	importPathCache        sync.Map // source file + import path -> resolved package dir (or "")
+}
+
+type goModuleInfo struct {
+	moduleName  string
+	replacePaths map[string]string
 }
 
 // NewProjectImportResolver creates a Go dependency resolver with precomputed package export indices.
@@ -33,13 +42,14 @@ func NewProjectImportResolver(
 
 // ResolveProjectImports resolves Go project imports for a single file using cached indices.
 func (r *ProjectImportResolver) ResolveProjectImports(absPath, filePath string) ([]string, error) {
-	return ResolveGoProjectImports(
+	return resolveGoProjectImports(
 		absPath,
 		filePath,
 		r.dirToFiles,
 		r.goPackageExportIndices,
 		r.suppliedFiles,
-		r.contentReader)
+		r.contentReader,
+		r.resolveImportPath)
 }
 
 func BuildGoPackageExportIndices(dirToFiles map[string][]string, contentReader vcs.ContentReader) map[string]GoPackageExportIndex {
@@ -74,26 +84,43 @@ func ResolveGoProjectImports(
 	suppliedFiles map[string]bool,
 	contentReader vcs.ContentReader,
 ) ([]string, error) {
+	return resolveGoProjectImports(
+		absPath,
+		filePath,
+		dirToFiles,
+		goPackageExportIndices,
+		suppliedFiles,
+		contentReader,
+		func(sourceFile, importPath string) string {
+			return resolveGoImportPath(sourceFile, importPath, contentReader)
+		})
+}
+
+func resolveGoProjectImports(
+	absPath string,
+	filePath string,
+	dirToFiles map[string][]string,
+	goPackageExportIndices map[string]GoPackageExportIndex,
+	suppliedFiles map[string]bool,
+	contentReader vcs.ContentReader,
+	importPathResolver func(sourceFile, importPath string) string,
+) ([]string, error) {
 	sourceContent, err := contentReader(absPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s: %w", absPath, err)
 	}
 
-	imports, err := ParseGoImports(sourceContent)
+	imports, embeds, exportInfo, err := AnalyzeGoFileFromContent(absPath, sourceContent)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse imports in %s: %w", filePath, err)
 	}
 
 	var projectImports []string
 
-	// Parse //go:embed directives
-	embeds, _ := ParseGoEmbeds(sourceContent)
+	// Parse //go:embed directives.
 	for _, embed := range embeds {
 		projectImports = append(projectImports, resolveGoEmbedPaths(absPath, embed.Pattern, suppliedFiles)...)
 	}
-
-	// Extract export info for symbol-level cross-package resolution
-	exportInfo, _ := ExtractGoExportInfoFromContent(absPath, sourceContent)
 
 	// Determine if this is a test file
 	isTestFile := strings.HasSuffix(absPath, "_test.go")
@@ -112,7 +139,7 @@ func ResolveGoProjectImports(
 			continue
 		}
 
-		packageDir := resolveGoImportPath(absPath, importPath, contentReader)
+		packageDir := importPathResolver(absPath, importPath)
 		if packageDir == "" {
 			continue
 		}
@@ -152,6 +179,92 @@ func ResolveGoProjectImports(
 	}
 
 	return projectImports, nil
+}
+
+func (r *ProjectImportResolver) resolveImportPath(sourceFile, importPath string) string {
+	cacheKey := sourceFile + "\x00" + importPath
+	if cached, ok := r.importPathCache.Load(cacheKey); ok {
+		return cached.(string)
+	}
+
+	sourceDir := filepath.Dir(sourceFile)
+	moduleRoot := r.findModuleRootCached(sourceDir)
+	if moduleRoot == "" {
+		r.importPathCache.Store(cacheKey, "")
+		return ""
+	}
+
+	moduleInfo := r.getModuleInfoCached(moduleRoot)
+	if moduleInfo.moduleName == "" {
+		r.importPathCache.Store(cacheKey, "")
+		return ""
+	}
+
+	if strings.HasPrefix(importPath, moduleInfo.moduleName) {
+		relativePath := strings.TrimPrefix(importPath, moduleInfo.moduleName+"/")
+		absPath := filepath.Join(moduleRoot, relativePath)
+		resolved := filepath.Clean(absPath)
+		r.importPathCache.Store(cacheKey, resolved)
+		return resolved
+	}
+
+	if replacedPath := resolveViaReplace(importPath, moduleInfo.replacePaths); replacedPath != "" {
+		r.importPathCache.Store(cacheKey, replacedPath)
+		return replacedPath
+	}
+
+	r.importPathCache.Store(cacheKey, "")
+	return ""
+}
+
+func (r *ProjectImportResolver) findModuleRootCached(startDir string) string {
+	if cached, ok := r.moduleRootCache.Load(startDir); ok {
+		return cached.(string)
+	}
+
+	dir := startDir
+	visited := make([]string, 0, 8)
+	for {
+		visited = append(visited, dir)
+		if cached, ok := r.moduleRootCache.Load(dir); ok {
+			root := cached.(string)
+			for _, path := range visited {
+				r.moduleRootCache.Store(path, root)
+			}
+			return root
+		}
+
+		goModPath := filepath.Join(dir, "go.mod")
+		if _, err := r.contentReader(goModPath); err == nil {
+			for _, path := range visited {
+				r.moduleRootCache.Store(path, dir)
+			}
+			return dir
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			for _, path := range visited {
+				r.moduleRootCache.Store(path, "")
+			}
+			return ""
+		}
+		dir = parent
+	}
+}
+
+func (r *ProjectImportResolver) getModuleInfoCached(moduleRoot string) goModuleInfo {
+	if cached, ok := r.moduleInfoCache.Load(moduleRoot); ok {
+		return cached.(goModuleInfo)
+	}
+
+	moduleName, replacePaths := getModuleInfo(moduleRoot, r.contentReader)
+	info := goModuleInfo{
+		moduleName:  moduleName,
+		replacePaths: replacePaths,
+	}
+	r.moduleInfoCache.Store(moduleRoot, info)
+	return info
 }
 
 func fileDefinesAnyUsedSymbol(depFile string, usedSymbols map[string]bool, exportIndex GoPackageExportIndex) bool {
