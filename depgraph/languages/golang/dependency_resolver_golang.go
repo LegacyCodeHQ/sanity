@@ -19,7 +19,7 @@ type ProjectImportResolver struct {
 	moduleRootCache        sync.Map // source dir -> module root (or "")
 	moduleInfoCache        sync.Map // module root -> goModuleInfo
 	importPathCache        sync.Map // source file + import path -> resolved package dir (or "")
-	symbolInfoCache        sync.Map // absolute file path -> *GoSymbolInfo
+	analysisCache          sync.Map // absolute file path -> *GoFileAnalysis
 }
 
 type goModuleInfo struct {
@@ -33,25 +33,30 @@ func NewProjectImportResolver(
 	suppliedFiles map[string]bool,
 	contentReader vcs.ContentReader,
 ) *ProjectImportResolver {
-	return &ProjectImportResolver{
-		dirToFiles:             dirToFiles,
-		goPackageExportIndices: BuildGoPackageExportIndices(dirToFiles, contentReader),
-		suppliedFiles:          suppliedFiles,
-		contentReader:          contentReader,
+	resolver := &ProjectImportResolver{
+		dirToFiles:    dirToFiles,
+		suppliedFiles: suppliedFiles,
+		contentReader: contentReader,
 	}
+	resolver.goPackageExportIndices = resolver.buildGoPackageExportIndices()
+	return resolver
 }
 
 // ResolveProjectImports resolves Go project imports for a single file using cached indices.
 func (r *ProjectImportResolver) ResolveProjectImports(absPath, filePath string) ([]string, error) {
-	return resolveGoProjectImports(
+	analysis, err := r.getOrAnalyzeFile(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse imports in %s: %w", filePath, err)
+	}
+	return resolveGoProjectImportsFromAnalysis(
 		absPath,
-		filePath,
 		r.dirToFiles,
 		r.goPackageExportIndices,
 		r.suppliedFiles,
-		r.contentReader,
-		r.resolveImportPath,
-		r.storeSymbolInfo)
+		analysis.Imports,
+		analysis.Embeds,
+		analysis.ExportInfo,
+		r.resolveImportPath), nil
 }
 
 func BuildGoPackageExportIndices(dirToFiles map[string][]string, contentReader vcs.ContentReader) map[string]GoPackageExportIndex {
@@ -86,57 +91,48 @@ func ResolveGoProjectImports(
 	suppliedFiles map[string]bool,
 	contentReader vcs.ContentReader,
 ) ([]string, error) {
-	return resolveGoProjectImports(
-		absPath,
-		filePath,
-		dirToFiles,
-		goPackageExportIndices,
-		suppliedFiles,
-		contentReader,
-		func(sourceFile, importPath string) string {
-			return resolveGoImportPath(sourceFile, importPath, contentReader)
-		},
-		nil)
-}
-
-func resolveGoProjectImports(
-	absPath string,
-	filePath string,
-	dirToFiles map[string][]string,
-	goPackageExportIndices map[string]GoPackageExportIndex,
-	suppliedFiles map[string]bool,
-	contentReader vcs.ContentReader,
-	importPathResolver func(sourceFile, importPath string) string,
-	symbolInfoSink func(filePath string, info *GoSymbolInfo),
-) ([]string, error) {
 	sourceContent, err := contentReader(absPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s: %w", absPath, err)
 	}
 
-	imports, embeds, symbolInfo, exportInfo, err := AnalyzeGoFileFromContent(absPath, sourceContent)
+	imports, embeds, _, exportInfo, err := AnalyzeGoFileFromContent(absPath, sourceContent)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse imports in %s: %w", filePath, err)
 	}
-	if symbolInfoSink != nil && symbolInfo != nil {
-		symbolInfoSink(absPath, symbolInfo)
-	}
+	return resolveGoProjectImportsFromAnalysis(
+		absPath,
+		dirToFiles,
+		goPackageExportIndices,
+		suppliedFiles,
+		imports,
+		embeds,
+		exportInfo,
+		func(sourceFile, importPath string) string {
+			return resolveGoImportPath(sourceFile, importPath, contentReader)
+		},
+	), nil
+}
 
-	var projectImports []string
+func resolveGoProjectImportsFromAnalysis(
+	absPath string,
+	dirToFiles map[string][]string,
+	goPackageExportIndices map[string]GoPackageExportIndex,
+	suppliedFiles map[string]bool,
+	imports []GoImport,
+	embeds []GoEmbed,
+	exportInfo *GoExportInfo,
+	importPathResolver func(sourceFile, importPath string) string,
+) []string {
+	projectImports := make([]string, 0, len(imports))
 
-	// Parse //go:embed directives.
 	for _, embed := range embeds {
 		projectImports = append(projectImports, resolveGoEmbedPaths(absPath, embed.Pattern, suppliedFiles)...)
 	}
 
-	// Determine if this is a test file
 	isTestFile := strings.HasSuffix(absPath, "_test.go")
-
 	for _, imp := range imports {
 		var importPath string
-
-		// Check both InternalImport and ExternalImport types
-		// resolveGoImportPath will determine if they're actually part of this module
 		switch typedImp := imp.(type) {
 		case InternalImport:
 			importPath = typedImp.Path()
@@ -165,27 +161,23 @@ func resolveGoProjectImports(
 				if depFile == absPath {
 					continue
 				}
-
 				if strings.HasSuffix(depFile, "_test.go") && !sameDir {
 					continue
 				}
-
 				if filepath.Ext(depFile) != ".go" {
 					continue
 				}
-
 				if (!sameDir || isTestFile) && hasExportIndex && usedSymbols != nil && len(usedSymbols) > 0 {
 					if !fileDefinesAnyUsedSymbol(depFile, usedSymbols, exportIndex) {
 						continue
 					}
 				}
-
 				projectImports = append(projectImports, depFile)
 			}
 		}
 	}
 
-	return projectImports, nil
+	return projectImports
 }
 
 func (r *ProjectImportResolver) resolveImportPath(sourceFile, importPath string) string {
@@ -274,23 +266,59 @@ func (r *ProjectImportResolver) getModuleInfoCached(moduleRoot string) goModuleI
 	return info
 }
 
-func (r *ProjectImportResolver) storeSymbolInfo(filePath string, info *GoSymbolInfo) {
-	if info == nil {
-		return
+func (r *ProjectImportResolver) buildGoPackageExportIndices() map[string]GoPackageExportIndex {
+	goPackageExportIndices := make(map[string]GoPackageExportIndex)
+	for dir, files := range r.dirToFiles {
+		exportIndex := make(GoPackageExportIndex)
+		for _, filePath := range files {
+			if filepath.Ext(filePath) != ".go" || strings.HasSuffix(filePath, "_test.go") {
+				continue
+			}
+			analysis, err := r.getOrAnalyzeFile(filePath)
+			if err != nil || analysis == nil || analysis.ExportInfo == nil {
+				continue
+			}
+			for symbol := range analysis.ExportInfo.Exports {
+				exportIndex[symbol] = append(exportIndex[symbol], filePath)
+			}
+		}
+		if len(exportIndex) > 0 {
+			goPackageExportIndices[dir] = exportIndex
+		}
 	}
-	r.symbolInfoCache.Store(filePath, info)
+	return goPackageExportIndices
+}
+
+func (r *ProjectImportResolver) getOrAnalyzeFile(filePath string) (*GoFileAnalysis, error) {
+	if cached, ok := r.analysisCache.Load(filePath); ok {
+		analysis, ok := cached.(*GoFileAnalysis)
+		if ok && analysis != nil {
+			return analysis, nil
+		}
+	}
+
+	content, err := r.contentReader(filePath)
+	if err != nil {
+		return nil, err
+	}
+	analysis, err := AnalyzeGoFileDetailsFromContent(filePath, content)
+	if err != nil {
+		return nil, err
+	}
+	r.analysisCache.Store(filePath, analysis)
+	return analysis, nil
 }
 
 func (r *ProjectImportResolver) getSymbolInfo(filePath string) (*GoSymbolInfo, bool) {
-	cached, ok := r.symbolInfoCache.Load(filePath)
+	cached, ok := r.analysisCache.Load(filePath)
 	if !ok {
 		return nil, false
 	}
-	info, ok := cached.(*GoSymbolInfo)
-	if !ok || info == nil {
+	analysis, ok := cached.(*GoFileAnalysis)
+	if !ok || analysis == nil || analysis.SymbolInfo == nil {
 		return nil, false
 	}
-	return info, true
+	return analysis.SymbolInfo, true
 }
 
 func fileDefinesAnyUsedSymbol(depFile string, usedSymbols map[string]bool, exportIndex GoPackageExportIndex) bool {

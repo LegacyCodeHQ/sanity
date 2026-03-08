@@ -34,13 +34,31 @@ type GoExportInfo struct {
 // GoPackageExportIndex maps exported symbols to their defining files within a package directory
 type GoPackageExportIndex map[string][]string // symbol name -> list of files defining it
 
+// GoFileAnalysis holds all parse-derived metadata for a Go file.
+type GoFileAnalysis struct {
+	Imports    []GoImport
+	Embeds     []GoEmbed
+	SymbolInfo *GoSymbolInfo
+	ExportInfo *GoExportInfo
+}
+
 // AnalyzeGoFileFromContent parses a Go file once and extracts import paths,
 // embed directives, symbol metadata, and export/import-usage metadata.
 func AnalyzeGoFileFromContent(filePath string, content []byte) ([]GoImport, []GoEmbed, *GoSymbolInfo, *GoExportInfo, error) {
+	analysis, err := AnalyzeGoFileDetailsFromContent(filePath, content)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	return analysis.Imports, analysis.Embeds, analysis.SymbolInfo, analysis.ExportInfo, nil
+}
+
+// AnalyzeGoFileDetailsFromContent parses a Go file once and returns a reusable analysis.
+func AnalyzeGoFileDetailsFromContent(filePath string, content []byte) (*GoFileAnalysis, error) {
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, filePath, content, parser.ParseComments)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, err
 	}
 
 	imports := make([]GoImport, 0, len(node.Imports))
@@ -66,15 +84,20 @@ func AnalyzeGoFileFromContent(filePath string, content []byte) ([]GoImport, []Go
 
 	exportInfo, err := extractExportInfoFromAST(filePath, node)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, err
 	}
 
 	symbolInfo, err := extractSymbolsFromAST(filePath, node)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, err
 	}
 
-	return imports, embeds, symbolInfo, exportInfo, nil
+	return &GoFileAnalysis{
+		Imports:    imports,
+		Embeds:     embeds,
+		SymbolInfo: symbolInfo,
+		ExportInfo: exportInfo,
+	}, nil
 }
 
 // ExtractGoSymbols analyzes a Go file and extracts defined and referenced symbols

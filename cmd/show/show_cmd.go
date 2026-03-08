@@ -40,6 +40,7 @@ type graphOptions struct {
 	pruneFiles   []string
 	alsoPatterns []string
 	edgeLabels   bool
+	noStats      bool
 }
 
 const (
@@ -108,6 +109,7 @@ func NewCommand() *cobra.Command {
 	cmd.Flags().StringSliceVar(&opts.pruneFiles, "prune", nil, "Show node but skip its subtree (requires --file; shown with dashed border)")
 	cmd.Flags().StringSliceVar(&opts.alsoPatterns, "also", nil, "Include files matching glob patterns that connect to --file graph (requires --file)")
 	cmd.Flags().BoolVar(&opts.edgeLabels, "label", false, "Add deterministic short labels to edges")
+	cmd.Flags().BoolVar(&opts.noStats, "no-stats", false, "Skip file addition/deletion statistics for faster rendering")
 
 	return cmd
 }
@@ -764,6 +766,10 @@ func graphFiles(graph depgraph.DependencyGraph) []string {
 }
 
 func collectFileStats(cmd *cobra.Command, opts *graphOptions, format formatters.OutputFormat, fromCommit, toCommit string, isCommitRange bool) map[string]vcs.FileStats {
+	if opts.noStats {
+		return nil
+	}
+
 	if format != formatters.OutputFormatDOT && format != formatters.OutputFormatMermaid {
 		return nil
 	}
