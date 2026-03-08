@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"runtime"
+	"sync"
 
 	graphlib "github.com/dominikbraun/graph"
 
@@ -35,42 +37,94 @@ func BuildDependencyGraphWithResolver(
 		return nil, fmt.Errorf("dependency resolver is required")
 	}
 
-	// Second pass: build the dependency graph
-	for _, filePath := range filePaths {
-		// Get absolute path
-		absPath, err := filepath.Abs(filePath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve path %s: %w", filePath, err)
+	type resolveResult struct {
+		absPath        string
+		projectImports []string
+		supported      bool
+		err            error
+	}
+
+	workerCount := runtime.GOMAXPROCS(0)
+	if workerCount < 1 {
+		workerCount = 1
+	}
+	if workerCount > len(filePaths) {
+		workerCount = len(filePaths)
+	}
+	if workerCount < 1 {
+		workerCount = 1
+	}
+
+	results := make([]resolveResult, len(filePaths))
+	jobs := make(chan int)
+	var wg sync.WaitGroup
+
+	for range workerCount {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for idx := range jobs {
+				filePath := filePaths[idx]
+				absPath, err := filepath.Abs(filePath)
+				if err != nil {
+					results[idx] = resolveResult{
+						err: fmt.Errorf("failed to resolve path %s: %w", filePath, err),
+					}
+					continue
+				}
+
+				ext := filepath.Ext(absPath)
+				if !dependencyResolver.SupportsFileExtension(ext) {
+					results[idx] = resolveResult{
+						absPath:   absPath,
+						supported: false,
+					}
+					continue
+				}
+
+				projectImports, err := dependencyResolver.ResolveProjectImports(absPath, filePath, ext)
+				if err != nil {
+					results[idx] = resolveResult{err: err}
+					continue
+				}
+
+				if len(projectImports) > 0 {
+					projectImports = deduplicatePaths(projectImports)
+				}
+				results[idx] = resolveResult{
+					absPath:        absPath,
+					projectImports: projectImports,
+					supported:      true,
+				}
+			}
+		}()
+	}
+
+	for i := range filePaths {
+		jobs <- i
+	}
+	close(jobs)
+	wg.Wait()
+
+	for _, result := range results {
+		if result.err != nil {
+			return nil, result.err
 		}
 
-		ext := filepath.Ext(absPath)
+		if err := graph.AddVertex(result.absPath); err != nil && !errors.Is(err, graphlib.ErrVertexAlreadyExists) {
+			return nil, fmt.Errorf("failed to add graph vertex %s: %w", result.absPath, err)
+		}
 
-		// Check if this is a supported file type
-		if !dependencyResolver.SupportsFileExtension(ext) {
-			// Unsupported files are included in the graph with no dependencies
-			if err := graph.AddVertex(absPath); err != nil && !errors.Is(err, graphlib.ErrVertexAlreadyExists) {
-				return nil, fmt.Errorf("failed to add graph vertex %s: %w", absPath, err)
-			}
+		if !result.supported {
 			continue
 		}
 
-		projectImports, err := dependencyResolver.ResolveProjectImports(absPath, filePath, ext)
-		if err != nil {
-			return nil, err
-		}
-
-		if len(projectImports) > 0 {
-			projectImports = deduplicatePaths(projectImports)
-		}
-		if err := graph.AddVertex(absPath); err != nil && !errors.Is(err, graphlib.ErrVertexAlreadyExists) {
-			return nil, fmt.Errorf("failed to add graph vertex %s: %w", absPath, err)
-		}
-		for _, dep := range projectImports {
+		for _, dep := range result.projectImports {
 			if err := graph.AddVertex(dep); err != nil && !errors.Is(err, graphlib.ErrVertexAlreadyExists) {
 				return nil, fmt.Errorf("failed to add graph dependency vertex %s: %w", dep, err)
 			}
-			if err := graph.AddEdge(absPath, dep); err != nil && !errors.Is(err, graphlib.ErrEdgeAlreadyExists) {
-				return nil, fmt.Errorf("failed to add graph edge %s -> %s: %w", absPath, dep, err)
+			if err := graph.AddEdge(result.absPath, dep); err != nil && !errors.Is(err, graphlib.ErrEdgeAlreadyExists) {
+				return nil, fmt.Errorf("failed to add graph edge %s -> %s: %w", result.absPath, dep, err)
 			}
 		}
 	}

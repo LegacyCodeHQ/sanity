@@ -2,12 +2,14 @@ package depgraph
 
 import (
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
 type stubDependencyResolver struct {
 	supportedByExt map[string]bool
-	resolvedFiles  []string
+	mu            sync.Mutex
+	resolvedFiles []string
 }
 
 func (s *stubDependencyResolver) SupportsFileExtension(ext string) bool {
@@ -15,7 +17,9 @@ func (s *stubDependencyResolver) SupportsFileExtension(ext string) bool {
 }
 
 func (s *stubDependencyResolver) ResolveProjectImports(absPath, _, _ string) ([]string, error) {
+	s.mu.Lock()
 	s.resolvedFiles = append(s.resolvedFiles, absPath)
+	s.mu.Unlock()
 	return []string{}, nil
 }
 
