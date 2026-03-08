@@ -3,10 +3,13 @@ package git
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/LegacyCodeHQ/clarity/vcs"
 )
@@ -85,7 +88,8 @@ func GetUncommittedFileStats(repoPath string) (map[string]vcs.FileStats, error) 
 		}
 	}
 
-	// Include entries for new/untracked files that may not appear in numstat output
+	// Include entries for new/untracked files that may not appear in numstat output.
+	var lineCountTargets []string
 	for relPath, status := range statusMap {
 		if !isNewStatus(status) {
 			continue
@@ -95,11 +99,14 @@ func GetUncommittedFileStats(repoPath string) (map[string]vcs.FileStats, error) 
 		fileStats := stats[absPath]
 		fileStats.IsNew = true
 		if fileStats.Additions == 0 && fileStats.Deletions == 0 {
-			lineCount, err := countLinesInFile(absPath)
-			if err == nil {
-				fileStats.Additions = lineCount
-			}
+			lineCountTargets = append(lineCountTargets, absPath)
 		}
+		stats[absPath] = fileStats
+	}
+
+	for absPath, lineCount := range countLinesInFilesParallel(lineCountTargets) {
+		fileStats := stats[absPath]
+		fileStats.Additions = lineCount
 		stats[absPath] = fileStats
 	}
 
@@ -460,17 +467,92 @@ func isNewStatus(status string) bool {
 }
 
 func countLinesInFile(path string) (int, error) {
-	content, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return 0, err
 	}
-	if len(content) == 0 {
-		return 0, nil
+	defer file.Close()
+
+	buf := make([]byte, 32*1024)
+	lineCount := 0
+	hasContent := false
+	var lastByte byte
+
+	for {
+		n, err := file.Read(buf)
+		if n > 0 {
+			hasContent = true
+			lastByte = buf[n-1]
+			lineCount += bytes.Count(buf[:n], []byte{'\n'})
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return 0, err
+		}
 	}
 
-	lines := bytes.Count(content, []byte{'\n'})
-	if content[len(content)-1] != '\n' {
-		lines++
+	if !hasContent {
+		return 0, nil
 	}
-	return lines, nil
+	if lastByte != '\n' {
+		lineCount++
+	}
+	return lineCount, nil
+}
+
+func countLinesInFilesParallel(paths []string) map[string]int {
+	if len(paths) == 0 {
+		return make(map[string]int)
+	}
+
+	workerCount := runtime.GOMAXPROCS(0)
+	if workerCount < 1 {
+		workerCount = 1
+	}
+	if workerCount > len(paths) {
+		workerCount = len(paths)
+	}
+
+	type lineCountResult struct {
+		path  string
+		lines int
+	}
+
+	jobs := make(chan string)
+	results := make(chan lineCountResult, len(paths))
+	var wg sync.WaitGroup
+
+	for range workerCount {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for path := range jobs {
+				lines, err := countLinesInFile(path)
+				if err != nil {
+					continue
+				}
+				results <- lineCountResult{
+					path:  path,
+					lines: lines,
+				}
+			}
+		}()
+	}
+
+	for _, path := range paths {
+		jobs <- path
+	}
+	close(jobs)
+
+	wg.Wait()
+	close(results)
+
+	lineCounts := make(map[string]int, len(paths))
+	for result := range results {
+		lineCounts[result.path] = result.lines
+	}
+
+	return lineCounts
 }
