@@ -5,7 +5,9 @@ import (
 	"go/parser"
 	"go/token"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/LegacyCodeHQ/clarity/vcs"
 )
@@ -33,12 +35,12 @@ type GoExportInfo struct {
 type GoPackageExportIndex map[string][]string // symbol name -> list of files defining it
 
 // AnalyzeGoFileFromContent parses a Go file once and extracts import paths,
-// embed directives, and export/import-usage metadata.
-func AnalyzeGoFileFromContent(filePath string, content []byte) ([]GoImport, []GoEmbed, *GoExportInfo, error) {
+// embed directives, symbol metadata, and export/import-usage metadata.
+func AnalyzeGoFileFromContent(filePath string, content []byte) ([]GoImport, []GoEmbed, *GoSymbolInfo, *GoExportInfo, error) {
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, filePath, content, parser.ParseComments)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	imports := make([]GoImport, 0, len(node.Imports))
@@ -64,10 +66,15 @@ func AnalyzeGoFileFromContent(filePath string, content []byte) ([]GoImport, []Go
 
 	exportInfo, err := extractExportInfoFromAST(filePath, node)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
-	return imports, embeds, exportInfo, nil
+	symbolInfo, err := extractSymbolsFromAST(filePath, node)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	return imports, embeds, symbolInfo, exportInfo, nil
 }
 
 // ExtractGoSymbols analyzes a Go file and extracts defined and referenced symbols
@@ -374,6 +381,16 @@ func GetUsedSymbolsFromPackage(exportInfo *GoExportInfo, importPath string) map[
 // The contentReader function is used to read file contents, allowing the caller to control
 // whether files are read from the filesystem, a git commit, or another source.
 func BuildIntraPackageDependencies(filePaths []string, contentReader vcs.ContentReader) (map[string][]string, error) {
+	return BuildIntraPackageDependenciesWithSymbolLookup(filePaths, contentReader, nil)
+}
+
+// BuildIntraPackageDependenciesWithSymbolLookup builds dependencies between files
+// in the same Go package and optionally reuses caller-provided symbol metadata.
+func BuildIntraPackageDependenciesWithSymbolLookup(
+	filePaths []string,
+	contentReader vcs.ContentReader,
+	symbolLookup func(filePath string) (*GoSymbolInfo, bool),
+) (map[string][]string, error) {
 	// Group files by package
 	packageFiles := make(map[string][]string)
 	for _, filePath := range filePaths {
@@ -391,95 +408,142 @@ func BuildIntraPackageDependencies(filePaths []string, contentReader vcs.Content
 		packageFiles[pkgDir] = append(packageFiles[pkgDir], absPath)
 	}
 
-	// Build dependencies for each package
-	dependencies := make(map[string][]string)
-
+	packageGroups := make([][]string, 0, len(packageFiles))
 	for _, files := range packageFiles {
-		// Separate test and non-test files
-		var testFiles, nonTestFiles []*GoSymbolInfo
+		packageGroups = append(packageGroups, files)
+	}
 
-		// Extract symbols from all files in the package
-		for _, file := range files {
+	dependencies := make(map[string][]string)
+	workerCount := runtime.GOMAXPROCS(0)
+	if workerCount < 1 {
+		workerCount = 1
+	}
+	if workerCount > len(packageGroups) {
+		workerCount = len(packageGroups)
+	}
+	if workerCount < 1 {
+		workerCount = 1
+	}
+
+	jobs := make(chan []string)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	for range workerCount {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for files := range jobs {
+				packageDeps := buildPackageDependencies(files, contentReader, symbolLookup)
+				mu.Lock()
+				for file, deps := range packageDeps {
+					dependencies[file] = deps
+				}
+				mu.Unlock()
+			}
+		}()
+	}
+
+	for _, files := range packageGroups {
+		jobs <- files
+	}
+	close(jobs)
+	wg.Wait()
+
+	return dependencies, nil
+}
+
+func buildPackageDependencies(
+	files []string,
+	contentReader vcs.ContentReader,
+	symbolLookup func(filePath string) (*GoSymbolInfo, bool),
+) map[string][]string {
+	// Separate test and non-test files.
+	var testFiles, nonTestFiles []*GoSymbolInfo
+
+	// Extract symbols from all files in the package.
+	for _, file := range files {
+		var info *GoSymbolInfo
+		if symbolLookup != nil {
+			if cached, ok := symbolLookup(file); ok && cached != nil {
+				info = cached
+			}
+		}
+		if info == nil {
 			content, err := contentReader(file)
 			if err != nil {
-				// Skip files that can't be read
+				// Skip files that can't be read.
 				continue
 			}
-
-			info, err := ExtractGoSymbolsFromContent(file, content)
+			parsed, err := ExtractGoSymbolsFromContent(file, content)
 			if err != nil {
-				// Skip files that can't be parsed
+				// Skip files that can't be parsed.
 				continue
 			}
-
-			if strings.HasSuffix(file, "_test.go") {
-				testFiles = append(testFiles, info)
-			} else {
-				nonTestFiles = append(nonTestFiles, info)
-			}
+			info = parsed
 		}
 
-		// Build symbol maps separately for test and non-test files
-		nonTestSymbolToFiles := make(map[string][]string)
-		for _, info := range nonTestFiles {
-			for symbol := range info.Defined {
-				nonTestSymbolToFiles[symbol] = append(nonTestSymbolToFiles[symbol], info.FilePath)
-			}
-		}
-
-		allSymbolToFiles := make(map[string][]string)
-		for _, info := range append(nonTestFiles, testFiles...) {
-			for symbol := range info.Defined {
-				allSymbolToFiles[symbol] = append(allSymbolToFiles[symbol], info.FilePath)
-			}
-		}
-
-		// For non-test files, only allow dependencies on other non-test files
-		for _, info := range nonTestFiles {
-			deps := make(map[string]bool)
-			for symbol := range info.Referenced {
-				// Only look in non-test files
-				if definingFiles, ok := nonTestSymbolToFiles[symbol]; ok {
-					for _, defFile := range definingFiles {
-						// Don't add self-dependencies
-						if defFile != info.FilePath {
-							deps[defFile] = true
-						}
-					}
-				}
-			}
-
-			// Convert set to slice
-			depSlice := make([]string, 0, len(deps))
-			for dep := range deps {
-				depSlice = append(depSlice, dep)
-			}
-			dependencies[info.FilePath] = depSlice
-		}
-
-		// For test files, allow dependencies on all files (test and non-test)
-		for _, info := range testFiles {
-			deps := make(map[string]bool)
-			for symbol := range info.Referenced {
-				// Look in all files
-				if definingFiles, ok := allSymbolToFiles[symbol]; ok {
-					for _, defFile := range definingFiles {
-						// Don't add self-dependencies
-						if defFile != info.FilePath {
-							deps[defFile] = true
-						}
-					}
-				}
-			}
-
-			// Convert set to slice
-			depSlice := make([]string, 0, len(deps))
-			for dep := range deps {
-				depSlice = append(depSlice, dep)
-			}
-			dependencies[info.FilePath] = depSlice
+		if strings.HasSuffix(file, "_test.go") {
+			testFiles = append(testFiles, info)
+		} else {
+			nonTestFiles = append(nonTestFiles, info)
 		}
 	}
 
-	return dependencies, nil
+	// Build symbol maps separately for test and non-test files.
+	nonTestSymbolToFiles := make(map[string][]string)
+	for _, info := range nonTestFiles {
+		for symbol := range info.Defined {
+			nonTestSymbolToFiles[symbol] = append(nonTestSymbolToFiles[symbol], info.FilePath)
+		}
+	}
+
+	allSymbolToFiles := make(map[string][]string)
+	for _, info := range append(nonTestFiles, testFiles...) {
+		for symbol := range info.Defined {
+			allSymbolToFiles[symbol] = append(allSymbolToFiles[symbol], info.FilePath)
+		}
+	}
+
+	dependencies := make(map[string][]string)
+
+	// For non-test files, only allow dependencies on other non-test files.
+	for _, info := range nonTestFiles {
+		deps := make(map[string]bool)
+		for symbol := range info.Referenced {
+			if definingFiles, ok := nonTestSymbolToFiles[symbol]; ok {
+				for _, defFile := range definingFiles {
+					if defFile != info.FilePath {
+						deps[defFile] = true
+					}
+				}
+			}
+		}
+		dependencies[info.FilePath] = dependencySetToSlice(deps)
+	}
+
+	// For test files, allow dependencies on all files (test and non-test).
+	for _, info := range testFiles {
+		deps := make(map[string]bool)
+		for symbol := range info.Referenced {
+			if definingFiles, ok := allSymbolToFiles[symbol]; ok {
+				for _, defFile := range definingFiles {
+					if defFile != info.FilePath {
+						deps[defFile] = true
+					}
+				}
+			}
+		}
+		dependencies[info.FilePath] = dependencySetToSlice(deps)
+	}
+
+	return dependencies
+}
+
+func dependencySetToSlice(deps map[string]bool) []string {
+	depSlice := make([]string, 0, len(deps))
+	for dep := range deps {
+		depSlice = append(depSlice, dep)
+	}
+	return depSlice
 }

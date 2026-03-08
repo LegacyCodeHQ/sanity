@@ -19,6 +19,7 @@ type ProjectImportResolver struct {
 	moduleRootCache        sync.Map // source dir -> module root (or "")
 	moduleInfoCache        sync.Map // module root -> goModuleInfo
 	importPathCache        sync.Map // source file + import path -> resolved package dir (or "")
+	symbolInfoCache        sync.Map // absolute file path -> *GoSymbolInfo
 }
 
 type goModuleInfo struct {
@@ -49,7 +50,8 @@ func (r *ProjectImportResolver) ResolveProjectImports(absPath, filePath string) 
 		r.goPackageExportIndices,
 		r.suppliedFiles,
 		r.contentReader,
-		r.resolveImportPath)
+		r.resolveImportPath,
+		r.storeSymbolInfo)
 }
 
 func BuildGoPackageExportIndices(dirToFiles map[string][]string, contentReader vcs.ContentReader) map[string]GoPackageExportIndex {
@@ -93,7 +95,8 @@ func ResolveGoProjectImports(
 		contentReader,
 		func(sourceFile, importPath string) string {
 			return resolveGoImportPath(sourceFile, importPath, contentReader)
-		})
+		},
+		nil)
 }
 
 func resolveGoProjectImports(
@@ -104,15 +107,19 @@ func resolveGoProjectImports(
 	suppliedFiles map[string]bool,
 	contentReader vcs.ContentReader,
 	importPathResolver func(sourceFile, importPath string) string,
+	symbolInfoSink func(filePath string, info *GoSymbolInfo),
 ) ([]string, error) {
 	sourceContent, err := contentReader(absPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s: %w", absPath, err)
 	}
 
-	imports, embeds, exportInfo, err := AnalyzeGoFileFromContent(absPath, sourceContent)
+	imports, embeds, symbolInfo, exportInfo, err := AnalyzeGoFileFromContent(absPath, sourceContent)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse imports in %s: %w", filePath, err)
+	}
+	if symbolInfoSink != nil && symbolInfo != nil {
+		symbolInfoSink(absPath, symbolInfo)
 	}
 
 	var projectImports []string
@@ -265,6 +272,25 @@ func (r *ProjectImportResolver) getModuleInfoCached(moduleRoot string) goModuleI
 	}
 	r.moduleInfoCache.Store(moduleRoot, info)
 	return info
+}
+
+func (r *ProjectImportResolver) storeSymbolInfo(filePath string, info *GoSymbolInfo) {
+	if info == nil {
+		return
+	}
+	r.symbolInfoCache.Store(filePath, info)
+}
+
+func (r *ProjectImportResolver) getSymbolInfo(filePath string) (*GoSymbolInfo, bool) {
+	cached, ok := r.symbolInfoCache.Load(filePath)
+	if !ok {
+		return nil, false
+	}
+	info, ok := cached.(*GoSymbolInfo)
+	if !ok || info == nil {
+		return nil, false
+	}
+	return info, true
 }
 
 func fileDefinesAnyUsedSymbol(depFile string, usedSymbols map[string]bool, exportIndex GoPackageExportIndex) bool {

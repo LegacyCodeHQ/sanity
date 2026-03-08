@@ -45,19 +45,25 @@ func (r resolver) ResolveProjectImports(absPath, filePath, _ string) ([]string, 
 }
 
 func (r resolver) FinalizeGraph(graph moduleapi.Graph) error {
-	return addGoIntraPackageDependencies(graph, r.ctx.GoFiles, r.contentReader)
+	return addGoIntraPackageDependencies(graph, r.ctx.GoFiles, r.contentReader, r.projectResolver)
 }
 
 func addGoIntraPackageDependencies(
 	graph moduleapi.Graph,
 	goFiles []string,
 	contentReader vcs.ContentReader,
+	projectResolver *ProjectImportResolver,
 ) error {
 	if len(goFiles) == 0 {
 		return nil
 	}
 
-	intraDeps, err := BuildIntraPackageDependencies(goFiles, vcs.ContentReader(contentReader))
+	var symbolLookup func(filePath string) (*GoSymbolInfo, bool)
+	if projectResolver != nil {
+		symbolLookup = projectResolver.getSymbolInfo
+	}
+
+	intraDeps, err := BuildIntraPackageDependenciesWithSymbolLookup(goFiles, vcs.ContentReader(contentReader), symbolLookup)
 	if err != nil {
 		return err
 	}
