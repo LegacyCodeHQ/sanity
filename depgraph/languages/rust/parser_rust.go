@@ -4,10 +4,21 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
+	"sync"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/rust"
+)
+
+var (
+	rustLanguage = rust.GetLanguage()
+	rustParserPool = sync.Pool{
+		New: func() any {
+			parser := sitter.NewParser()
+			parser.SetLanguage(rustLanguage)
+			return parser
+		},
+	}
 )
 
 // RustImportKind describes the type of Rust import-like declaration.
@@ -37,10 +48,12 @@ func RustImports(filePath string) ([]RustImport, error) {
 
 // ParseRustImports parses Rust source code and extracts imports.
 func ParseRustImports(sourceCode []byte) ([]RustImport, error) {
-	lang := rust.GetLanguage()
-
-	parser := sitter.NewParser()
-	parser.SetLanguage(lang)
+	parser, _ := rustParserPool.Get().(*sitter.Parser)
+	if parser == nil {
+		parser = sitter.NewParser()
+		parser.SetLanguage(rustLanguage)
+	}
+	defer rustParserPool.Put(parser)
 
 	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
 	if err != nil {
@@ -58,8 +71,9 @@ func extractImports(rootNode *sitter.Node, sourceCode []byte) []RustImport {
 
 	// Rust imports/declarations that affect module dependencies live at file scope.
 	// Restricting to top-level declarations avoids a full-tree walk and reduces cgo traversal overhead.
-	imports := make([]RustImport, 0, int(rootNode.NamedChildCount()))
-	for i := 0; i < int(rootNode.NamedChildCount()); i++ {
+	childCount := int(rootNode.NamedChildCount())
+	imports := make([]RustImport, 0, childCount)
+	for i := 0; i < childCount; i++ {
 		n := rootNode.NamedChild(i)
 		if n == nil {
 			continue
@@ -83,49 +97,49 @@ func extractImports(rootNode *sitter.Node, sourceCode []byte) []RustImport {
 }
 
 func extractUsePath(node *sitter.Node, sourceCode []byte) string {
-	pathNode := findUsePathNode(node)
-	if pathNode == nil {
+	if node == nil {
 		return ""
 	}
-	return strings.TrimSpace(pathNode.Content(sourceCode))
-}
 
-func findUsePathNode(node *sitter.Node) *sitter.Node {
-	if node == nil {
-		return nil
+	arg := node.ChildByFieldName("argument")
+	if arg == nil {
+		return ""
 	}
-	if isUsePathNode(node.Type()) {
-		return node
-	}
-	for i := 0; i < int(node.NamedChildCount()); i++ {
-		child := node.NamedChild(i)
-		if child == nil {
-			continue
-		}
-		if found := findUsePathNode(child); found != nil {
-			return found
-		}
-	}
-	return nil
-}
 
-func isUsePathNode(nodeType string) bool {
-	switch nodeType {
+	switch arg.Type() {
+	case "use_as_clause", "scoped_use_list":
+		if path := arg.ChildByFieldName("path"); path != nil {
+			return path.Content(sourceCode)
+		}
 	case "scoped_identifier", "identifier", "crate", "self", "super":
-		return true
-	default:
-		return false
+		return arg.Content(sourceCode)
 	}
+
+	return arg.Content(sourceCode)
+}
+
+func namedChildCount(node *sitter.Node) int {
+	if node == nil {
+		return 0
+	}
+	return int(node.NamedChildCount())
 }
 
 func extractExternCrate(node *sitter.Node, sourceCode []byte) string {
-	for i := 0; i < int(node.NamedChildCount()); i++ {
+	if node == nil {
+		return ""
+	}
+	if nameNode := node.ChildByFieldName("name"); nameNode != nil {
+		return nameNode.Content(sourceCode)
+	}
+	childCount := namedChildCount(node)
+	for i := 0; i < childCount; i++ {
 		child := node.NamedChild(i)
 		if child == nil {
 			continue
 		}
 		if child.Type() == "identifier" {
-			return strings.TrimSpace(child.Content(sourceCode))
+			return child.Content(sourceCode)
 		}
 	}
 	return ""
@@ -140,15 +154,16 @@ func extractModDecl(node *sitter.Node, sourceCode []byte) string {
 	}
 
 	if nameNode := node.ChildByFieldName("name"); nameNode != nil {
-		return strings.TrimSpace(nameNode.Content(sourceCode))
+		return nameNode.Content(sourceCode)
 	}
-	for i := 0; i < int(node.NamedChildCount()); i++ {
+	childCount := namedChildCount(node)
+	for i := 0; i < childCount; i++ {
 		child := node.NamedChild(i)
 		if child == nil {
 			continue
 		}
 		if child.Type() == "identifier" {
-			return strings.TrimSpace(child.Content(sourceCode))
+			return child.Content(sourceCode)
 		}
 	}
 	return ""
@@ -161,7 +176,8 @@ func modItemHasBody(node *sitter.Node) bool {
 	if body := node.ChildByFieldName("body"); body != nil {
 		return true
 	}
-	for i := 0; i < int(node.NamedChildCount()); i++ {
+	childCount := namedChildCount(node)
+	for i := 0; i < childCount; i++ {
 		child := node.NamedChild(i)
 		if child == nil {
 			continue
