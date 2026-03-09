@@ -75,8 +75,8 @@ func extractImports(rootNode *sitter.Node, sourceCode []byte) []RustImport {
 			}
 		}
 
-		for i := 0; i < int(n.ChildCount()); i++ {
-			walk(n.Child(i))
+		for i := 0; i < int(n.NamedChildCount()); i++ {
+			walk(n.NamedChild(i))
 		}
 	}
 
@@ -99,8 +99,8 @@ func findUsePathNode(node *sitter.Node) *sitter.Node {
 	if isUsePathNode(node.Type()) {
 		return node
 	}
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+	for i := 0; i < int(node.NamedChildCount()); i++ {
+		child := node.NamedChild(i)
 		if child == nil {
 			continue
 		}
@@ -121,8 +121,8 @@ func isUsePathNode(nodeType string) bool {
 }
 
 func extractExternCrate(node *sitter.Node, sourceCode []byte) string {
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+	for i := 0; i < int(node.NamedChildCount()); i++ {
+		child := node.NamedChild(i)
 		if child == nil {
 			continue
 		}
@@ -144,8 +144,8 @@ func extractModDecl(node *sitter.Node, sourceCode []byte) string {
 	if nameNode := node.ChildByFieldName("name"); nameNode != nil {
 		return strings.TrimSpace(nameNode.Content(sourceCode))
 	}
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+	for i := 0; i < int(node.NamedChildCount()); i++ {
+		child := node.NamedChild(i)
 		if child == nil {
 			continue
 		}
@@ -163,8 +163,8 @@ func modItemHasBody(node *sitter.Node) bool {
 	if body := node.ChildByFieldName("body"); body != nil {
 		return true
 	}
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+	for i := 0; i < int(node.NamedChildCount()); i++ {
+		child := node.NamedChild(i)
 		if child == nil {
 			continue
 		}
