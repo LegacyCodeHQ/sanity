@@ -29,3 +29,4 @@ cmd/watch/dist/
 Thumbs.db
 
 .compass/
+runs/
