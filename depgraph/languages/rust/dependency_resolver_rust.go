@@ -14,9 +14,10 @@ type ProjectImportResolver struct {
 	suppliedFiles map[string]bool
 	contentReader vcs.ContentReader
 
-	crateRootCache sync.Map // source file path -> crate root (or "")
+	crateRootCache sync.Map // directory path -> crate root (or "")
 	crateNameCache sync.Map // crate root -> map[string]bool
 	modDepsCache   sync.Map // mod.rs path -> []string
+	importsCache   sync.Map // file path -> []RustImport
 }
 
 func NewProjectImportResolver(suppliedFiles map[string]bool, contentReader vcs.ContentReader) *ProjectImportResolver {
@@ -27,14 +28,9 @@ func NewProjectImportResolver(suppliedFiles map[string]bool, contentReader vcs.C
 }
 
 func (r *ProjectImportResolver) ResolveProjectImports(absPath string, filePath string) ([]string, error) {
-	content, err := r.contentReader(absPath)
+	imports, err := r.importsForFile(absPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read %s: %w", absPath, err)
-	}
-
-	imports, parseErr := ParseRustImports(content)
-	if parseErr != nil {
-		return nil, fmt.Errorf("failed to parse imports in %s: %w", filePath, parseErr)
+		return nil, fmt.Errorf("failed to parse imports in %s: %w", filePath, err)
 	}
 
 	projectImports := make([]string, 0, len(imports))
@@ -164,32 +160,6 @@ func resolveRustModuleCandidates(baseDir string, parts []string, suppliedFiles m
 	return filterSuppliedFiles(candidates, suppliedFiles)
 }
 
-func expandRustModRsDependencies(
-	modRsPath string,
-	suppliedFiles map[string]bool,
-	contentReader vcs.ContentReader,
-) []string {
-	content, err := contentReader(modRsPath)
-	if err != nil {
-		return nil
-	}
-
-	imports, parseErr := ParseRustImports(content)
-	if parseErr != nil {
-		return nil
-	}
-
-	var resolved []string
-	for _, imp := range imports {
-		if imp.Kind != RustImportModDecl {
-			continue
-		}
-		resolved = append(resolved, resolveRustModDecl(modRsPath, imp.Path, suppliedFiles)...)
-	}
-
-	return deduplicateSuppliedFiles(resolved, suppliedFiles)
-}
-
 func filterOutRustSelfDependency(imports []string, sourceFile string) []string {
 	if len(imports) == 0 {
 		return imports
@@ -204,39 +174,52 @@ func filterOutRustSelfDependency(imports []string, sourceFile string) []string {
 	return filtered
 }
 
-func findRustCrateRoot(sourceFile string, suppliedFiles map[string]bool, contentReader vcs.ContentReader) (string, bool) {
-	dir := filepath.Dir(sourceFile)
-	for {
-		candidate := filepath.Join(dir, "Cargo.toml")
-		if suppliedFiles[candidate] {
-			return dir, true
-		}
-		if contentReader != nil {
-			if _, err := contentReader(candidate); err == nil {
-				return dir, true
-			}
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	return "", false
-}
-
 func (r *ProjectImportResolver) findRustCrateRoot(sourceFile string) (string, bool) {
-	if cached, ok := r.crateRootCache.Load(sourceFile); ok {
+	dir := filepath.Dir(sourceFile)
+	if cached, ok := r.crateRootCache.Load(dir); ok {
 		root := cached.(string)
 		return root, root != ""
 	}
 
-	root, ok := findRustCrateRoot(sourceFile, r.suppliedFiles, r.contentReader)
-	if ok {
-		r.crateRootCache.Store(sourceFile, root)
-		return root, true
+	current := dir
+	visited := make([]string, 0, 8)
+	for {
+		visited = append(visited, current)
+
+		if cached, ok := r.crateRootCache.Load(current); ok {
+			root := cached.(string)
+			for _, d := range visited {
+				r.crateRootCache.Store(d, root)
+			}
+			return root, root != ""
+		}
+
+		candidate := filepath.Join(current, "Cargo.toml")
+		if r.suppliedFiles[candidate] {
+			for _, d := range visited {
+				r.crateRootCache.Store(d, current)
+			}
+			return current, true
+		}
+		if r.contentReader != nil {
+			if _, err := r.contentReader(candidate); err == nil {
+				for _, d := range visited {
+					r.crateRootCache.Store(d, current)
+				}
+				return current, true
+			}
+		}
+
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
+		current = parent
 	}
-	r.crateRootCache.Store(sourceFile, "")
+
+	for _, d := range visited {
+		r.crateRootCache.Store(d, "")
+	}
 	return "", false
 }
 
@@ -287,9 +270,43 @@ func (r *ProjectImportResolver) expandRustModRsDependencies(modRsPath string) []
 		return cached.([]string)
 	}
 
-	resolved := expandRustModRsDependencies(modRsPath, r.suppliedFiles, r.contentReader)
+	imports, err := r.importsForFile(modRsPath)
+	if err != nil {
+		r.modDepsCache.Store(modRsPath, []string{})
+		return nil
+	}
+
+	resolved := make([]string, 0, len(imports))
+	for _, imp := range imports {
+		if imp.Kind != RustImportModDecl {
+			continue
+		}
+		resolved = append(resolved, resolveRustModDecl(modRsPath, imp.Path, r.suppliedFiles)...)
+	}
+	resolved = deduplicateSuppliedFiles(resolved, r.suppliedFiles)
 	r.modDepsCache.Store(modRsPath, resolved)
 	return resolved
+}
+
+func (r *ProjectImportResolver) importsForFile(path string) ([]RustImport, error) {
+	if cached, ok := r.importsCache.Load(path); ok {
+		return cached.([]RustImport), nil
+	}
+	if r.contentReader == nil {
+		return nil, fmt.Errorf("content reader is required")
+	}
+
+	content, err := r.contentReader(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read %s: %w", path, err)
+	}
+	imports, parseErr := ParseRustImports(content)
+	if parseErr != nil {
+		return nil, parseErr
+	}
+
+	r.importsCache.Store(path, imports)
+	return imports, nil
 }
 
 func parseRustCrateNamesFromCargoToml(content string) map[string]bool {
