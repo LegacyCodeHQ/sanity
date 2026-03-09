@@ -79,13 +79,19 @@ func (r *ProjectImportResolver) resolveRustUsePath(sourceFile, importPath string
 		return nil
 	}
 
-	parts := strings.Split(path, "::")
+	firstSegment := firstRustPathSegment(path)
+	if firstSegment == "" {
+		return nil
+	}
+
+	var parts []string
 	baseDir := ""
 	crateRoot := ""
 	rootedInLocalCrate := false
 
-	switch parts[0] {
+	switch firstSegment {
 	case "crate":
+		parts = strings.Split(path, "::")
 		root, ok := r.findRustCrateRoot(sourceFile)
 		if !ok {
 			return nil
@@ -95,6 +101,7 @@ func (r *ProjectImportResolver) resolveRustUsePath(sourceFile, importPath string
 		rootedInLocalCrate = true
 		parts = parts[1:]
 	case "self", "super":
+		parts = strings.Split(path, "::")
 		baseDir = filepath.Dir(sourceFile)
 		for len(parts) > 0 {
 			switch parts[0] {
@@ -109,9 +116,10 @@ func (r *ProjectImportResolver) resolveRustUsePath(sourceFile, importPath string
 		}
 	default:
 		root, ok := r.findRustCrateRoot(sourceFile)
-		if !ok || !r.isLocalRustCrateImport(parts[0], root) {
+		if !ok || !r.isLocalRustCrateImport(firstSegment, root) {
 			return nil
 		}
+		parts = strings.Split(path, "::")
 		crateRoot = root
 		baseDir = filepath.Join(root, "src")
 		rootedInLocalCrate = true
@@ -357,6 +365,13 @@ func parseRustCrateNamesFromCargoToml(content string) map[string]bool {
 
 func normalizeCargoCrateName(name string) string {
 	return strings.ReplaceAll(name, "-", "_")
+}
+
+func firstRustPathSegment(path string) string {
+	if idx := strings.Index(path, "::"); idx >= 0 {
+		return path[:idx]
+	}
+	return path
 }
 
 func filterSuppliedFiles(paths []string, suppliedFiles map[string]bool) []string {
