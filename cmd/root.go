@@ -3,6 +3,7 @@ package cmd
 import (
 	"log/slog"
 	"os"
+	"runtime/pprof"
 	"strconv"
 
 	diffcmd "github.com/LegacyCodeHQ/clarity/cmd/diff"
@@ -26,6 +27,9 @@ var commit = "unknown"
 
 // enableDevCommands is set via build-time ldflags
 var enableDevCommands = "false"
+
+var cpuProfilePath string
+var cpuProfileFile *os.File
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -53,7 +57,26 @@ Use cases:
 			"commit":    commit,
 			"buildDate": buildDate,
 		})
+
+		if cpuProfilePath != "" {
+			f, err := os.Create(cpuProfilePath)
+			if err != nil {
+				return err
+			}
+			if err := pprof.StartCPUProfile(f); err != nil {
+				_ = f.Close()
+				return err
+			}
+			cpuProfileFile = f
+		}
 		return nil
+	},
+	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		if cpuProfileFile != nil {
+			pprof.StopCPUProfile()
+			_ = cpuProfileFile.Close()
+			cpuProfileFile = nil
+		}
 	},
 }
 
@@ -84,6 +107,7 @@ func init() {
 	// Global flags inherited by all subcommands.
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose/debug output")
 	rootCmd.PersistentFlags().BoolP("version", "V", false, "Print version information and exit")
+	rootCmd.PersistentFlags().StringVar(&cpuProfilePath, "cpu-profile", "", "Write CPU profile to file")
 
 	// Initialize annotations for version template
 	if rootCmd.Annotations == nil {
