@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
@@ -96,6 +97,13 @@ var nodeBuiltins = map[string]bool{
 	"path/win32":     true,
 }
 
+var (
+	typeImportFromRE = regexp.MustCompile(`(?ms)^\s*import\s+type\b[\s\S]*?\bfrom\s*['"]([^'"]+)['"]`)
+	importFromRE     = regexp.MustCompile(`(?ms)^\s*import\b[\s\S]*?\bfrom\s*['"]([^'"]+)['"]`)
+	sideEffectRE     = regexp.MustCompile(`(?m)^\s*import\s*['"]([^'"]+)['"]`)
+	exportFromRE     = regexp.MustCompile(`(?ms)^\s*export\b[\s\S]*?\bfrom\s*['"]([^'"]+)['"]`)
+)
+
 // classifyTypeScriptImport classifies a TypeScript import path
 func classifyTypeScriptImport(importPath string, isTypeOnly bool) TypeScriptImport {
 	// Check for node: prefix (e.g., node:fs)
@@ -130,6 +138,10 @@ func TypeScriptImports(filePath string) ([]TypeScriptImport, error) {
 
 // ParseTypeScriptImports parses TypeScript source code and extracts imports
 func ParseTypeScriptImports(sourceCode []byte, isTSX bool) ([]TypeScriptImport, error) {
+	if fast := extractImportsFast(sourceCode); fast != nil {
+		return fast, nil
+	}
+
 	var lang *sitter.Language
 	if isTSX {
 		lang = tsx.GetLanguage()
@@ -147,6 +159,60 @@ func ParseTypeScriptImports(sourceCode []byte, isTSX bool) ([]TypeScriptImport, 
 	defer tree.Close()
 
 	return extractImportsFromTree(tree.RootNode(), sourceCode, lang)
+}
+
+func extractImportsFast(sourceCode []byte) []TypeScriptImport {
+	source := string(sourceCode)
+	imports := make([]TypeScriptImport, 0, 8)
+
+	for _, m := range typeImportFromRE.FindAllStringSubmatch(source, -1) {
+		if len(m) < 2 {
+			continue
+		}
+		importPath := cleanImportPath(m[1])
+		if importPath == "" {
+			continue
+		}
+		imports = append(imports, classifyTypeScriptImport(importPath, true))
+	}
+
+	for _, m := range importFromRE.FindAllStringSubmatch(source, -1) {
+		if len(m) < 2 {
+			continue
+		}
+		if strings.HasPrefix(strings.TrimSpace(m[0]), "import type") {
+			continue
+		}
+		importPath := cleanImportPath(m[1])
+		if importPath == "" {
+			continue
+		}
+		imports = append(imports, classifyTypeScriptImport(importPath, false))
+	}
+
+	for _, m := range sideEffectRE.FindAllStringSubmatch(source, -1) {
+		if len(m) < 2 {
+			continue
+		}
+		importPath := cleanImportPath(m[1])
+		if importPath == "" {
+			continue
+		}
+		imports = append(imports, classifyTypeScriptImport(importPath, false))
+	}
+
+	for _, m := range exportFromRE.FindAllStringSubmatch(source, -1) {
+		if len(m) < 2 {
+			continue
+		}
+		importPath := cleanImportPath(m[1])
+		if importPath == "" {
+			continue
+		}
+		imports = append(imports, classifyTypeScriptImport(importPath, false))
+	}
+
+	return imports
 }
 
 // extractImportsFromTree walks the AST and extracts imports
