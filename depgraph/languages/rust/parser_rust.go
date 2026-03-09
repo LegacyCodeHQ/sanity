@@ -52,14 +52,18 @@ func ParseRustImports(sourceCode []byte) ([]RustImport, error) {
 }
 
 func extractImports(rootNode *sitter.Node, sourceCode []byte) []RustImport {
-	var imports []RustImport
+	if rootNode == nil {
+		return nil
+	}
 
-	var walk func(*sitter.Node)
-	walk = func(n *sitter.Node) {
+	// Rust imports/declarations that affect module dependencies live at file scope.
+	// Restricting to top-level declarations avoids a full-tree walk and reduces cgo traversal overhead.
+	imports := make([]RustImport, 0, int(rootNode.NamedChildCount()))
+	for i := 0; i < int(rootNode.NamedChildCount()); i++ {
+		n := rootNode.NamedChild(i)
 		if n == nil {
-			return
+			continue
 		}
-
 		switch n.Type() {
 		case "use_declaration":
 			if path := extractUsePath(n, sourceCode); path != "" {
@@ -74,13 +78,7 @@ func extractImports(rootNode *sitter.Node, sourceCode []byte) []RustImport {
 				imports = append(imports, RustImport{Path: modName, Kind: RustImportModDecl})
 			}
 		}
-
-		for i := 0; i < int(n.NamedChildCount()); i++ {
-			walk(n.NamedChild(i))
-		}
 	}
-
-	walk(rootNode)
 	return imports
 }
 
