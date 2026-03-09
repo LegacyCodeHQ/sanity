@@ -1,6 +1,7 @@
 package typescript
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/LegacyCodeHQ/clarity/vcs"
@@ -16,6 +17,11 @@ func ResolveTypeScriptProjectImports(
 	content, err := contentReader(absPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s: %w", absPath, err)
+	}
+	if !bytes.Contains(content, []byte("./")) &&
+		!bytes.Contains(content, []byte("../")) &&
+		!bytes.Contains(content, []byte("@/")) {
+		return nil, nil
 	}
 
 	imports, parseErr := ParseTypeScriptImports(content, ext == ".tsx")
