@@ -1,6 +1,7 @@
 package typescript
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -162,6 +163,10 @@ func ParseTypeScriptImports(sourceCode []byte, isTSX bool) ([]TypeScriptImport, 
 }
 
 func extractImportsFast(sourceCode []byte) []TypeScriptImport {
+	if !bytes.Contains(sourceCode, []byte("import")) && !bytes.Contains(sourceCode, []byte("export")) {
+		return []TypeScriptImport{}
+	}
+
 	source := string(sourceCode)
 	imports := make([]TypeScriptImport, 0, 8)
 

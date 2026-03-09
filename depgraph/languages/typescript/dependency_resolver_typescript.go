@@ -24,10 +24,17 @@ func ResolveTypeScriptProjectImports(
 	}
 
 	var projectImports []string
+	seen := make(map[string]bool, len(imports))
 	for _, imp := range imports {
 		if internalImp, ok := imp.(InternalImport); ok {
 			resolvedFiles := ResolveTypeScriptImportPath(absPath, internalImp.Path(), suppliedFiles)
-			projectImports = append(projectImports, resolvedFiles...)
+			for _, resolvedFile := range resolvedFiles {
+				if seen[resolvedFile] {
+					continue
+				}
+				seen[resolvedFile] = true
+				projectImports = append(projectImports, resolvedFile)
+			}
 		}
 	}
 
