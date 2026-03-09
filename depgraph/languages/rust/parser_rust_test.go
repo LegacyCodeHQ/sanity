@@ -47,3 +47,39 @@ use std::fmt;
 	assert.Equal(t, "std::fmt", imports[0].Path)
 	assert.Equal(t, RustImportUse, imports[0].Kind)
 }
+
+func TestParseRustImports_FiltersNestedImports(t *testing.T) {
+	source := `
+use crate::top::level;
+
+fn helper() {
+  use crate::nested::only;
+}
+
+mod nested;
+`
+	imports, err := ParseRustImports([]byte(source))
+	require.NoError(t, err)
+
+	assert.Len(t, imports, 2)
+	assert.Equal(t, "crate::top::level", imports[0].Path)
+	assert.Equal(t, RustImportUse, imports[0].Kind)
+	assert.Equal(t, "nested", imports[1].Path)
+	assert.Equal(t, RustImportModDecl, imports[1].Kind)
+}
+
+func TestParseRustImports_VisibilityAndScopedUseList(t *testing.T) {
+	source := `
+#[cfg(feature = "x")]
+pub(crate) use crate::alpha::{beta, gamma};
+pub mod public_mod;
+`
+	imports, err := ParseRustImports([]byte(source))
+	require.NoError(t, err)
+
+	assert.Len(t, imports, 2)
+	assert.Equal(t, "crate::alpha", imports[0].Path)
+	assert.Equal(t, RustImportUse, imports[0].Kind)
+	assert.Equal(t, "public_mod", imports[1].Path)
+	assert.Equal(t, RustImportModDecl, imports[1].Kind)
+}
