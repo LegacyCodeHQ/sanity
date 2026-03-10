@@ -29,6 +29,7 @@ Inherited by all subcommands. Extracted from `cmd/root.go`.
 | `show` | Show a scoped file-based dependency graph |
 | `watch` | Watch for file changes and serve a live dependency graph |
 | `why <from> <to>` | Show direct dependency direction(s) between two files |
+| `workspace` | Experimental workspace relationship graph for Go modules and Rust crates |
 
 ---
 
@@ -150,5 +151,24 @@ clarity why <from> <to> [OPTIONS]
 | `--format` | `-f` | string | `opts.outputFormat` | fmt.Sprintf("Output format (%s)", supportedFormats()) |
 | `--repo` | `-r` | string | `""` | Git repository path (default: current directory) |
 | `--allow-outside-repo` | | bool | `false` | Allow input paths outside the repo root |
+
+---
+
+
+## `clarity workspace`
+
+Experimental workspace relationship graph for Go modules and Rust crates.
+
+```
+clarity workspace [OPTIONS]
+```
+
+| Flag | Short | Type | Default | Description |
+|---|---|---|---|---|
+| `--format` | `-f` | string | `opts.outputFormat` | fmt.Sprintf("Output format (%s)", formatters.SupportedFormats()) |
+| `--repo` | `-r` | string | `""` | Repository path (default: current directory) |
+| `--direction` | `-d` | string | `opts.direction` | fmt.Sprintf("Graph direction (%s)", formatters.SupportedDirections()) |
+| `--url` | `-u` | bool | `false` | Generate visualization URL (supported formats: dot, mermaid) |
+| `--language` | | string | `opts.language` | Workspace language filter (auto, go, rust) |
 
 ---
