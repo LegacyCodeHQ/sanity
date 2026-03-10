@@ -106,6 +106,7 @@ clarity show [OPTIONS]
 | `--scope` | | string | `opts.scope` | Dependency scope for --file (downstream only) |
 | `--allow-outside-repo` | | bool | `false` | Allow input paths outside the repo root |
 | `--label` | | bool | `false` | Add deterministic short labels to edges |
+| `--no-stats` | | bool | `false` | Skip file addition/deletion statistics for faster rendering |
 | `--exclude` | | []string | `nil` | Exclude specific files and/or directories from graph inputs (comma-separated) |
 | `--prune` | | []string | `nil` | Show node but skip its subtree (requires --file; shown with dashed border) |
 | `--also` | | []string | `nil` | Include files matching glob patterns that connect to --file graph (requires --file) |
