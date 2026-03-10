@@ -12,6 +12,7 @@ import (
 	"github.com/LegacyCodeHQ/clarity/cmd/show"
 	watchcmd "github.com/LegacyCodeHQ/clarity/cmd/watch"
 	whycmd "github.com/LegacyCodeHQ/clarity/cmd/why"
+	workspacecmd "github.com/LegacyCodeHQ/clarity/cmd/workspace"
 	"github.com/LegacyCodeHQ/clarity/internal/mcplogdlog"
 	"github.com/spf13/cobra"
 )
@@ -95,6 +96,7 @@ func Execute() {
 func init() {
 	// Register subcommands
 	rootCmd.AddCommand(show.Cmd)
+	rootCmd.AddCommand(workspacecmd.Cmd)
 	rootCmd.AddCommand(languages.Cmd)
 	rootCmd.AddCommand(setupcmd.Cmd)
 	rootCmd.AddCommand(watchcmd.Cmd)
