@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	diffcmd "github.com/LegacyCodeHQ/clarity/cmd/diff"
+	extensionscmd "github.com/LegacyCodeHQ/clarity/cmd/extensions"
 	"github.com/LegacyCodeHQ/clarity/cmd/languages"
 	setupcmd "github.com/LegacyCodeHQ/clarity/cmd/setup"
 	"github.com/LegacyCodeHQ/clarity/cmd/show"
@@ -98,6 +99,7 @@ func init() {
 	rootCmd.AddCommand(show.Cmd)
 	rootCmd.AddCommand(workspacecmd.Cmd)
 	rootCmd.AddCommand(languages.Cmd)
+	rootCmd.AddCommand(extensionscmd.Cmd)
 	rootCmd.AddCommand(setupcmd.Cmd)
 	rootCmd.AddCommand(watchcmd.Cmd)
 	if isDevelopmentBuild(enableDevCommands) {
