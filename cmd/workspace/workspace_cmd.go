@@ -30,6 +30,7 @@ type workspaceOptions struct {
 	generateURL  bool
 	direction    string
 	language     string
+	manifestPath string
 }
 
 // Cmd represents the experimental workspace graph command.
@@ -67,6 +68,7 @@ func NewCommand() *cobra.Command {
 		opts.direction,
 		fmt.Sprintf("Graph direction (%s)", formatters.SupportedDirections()))
 	cmd.Flags().StringVar(&opts.language, "language", opts.language, "Workspace language filter (auto, go, rust)")
+	cmd.Flags().StringVar(&opts.manifestPath, "manifest", "", "Prune workspace graph to the dependency subgraph rooted at this manifest path")
 
 	return cmd
 }
@@ -89,27 +91,30 @@ func runWorkspace(cmd *cobra.Command, opts *workspaceOptions) error {
 	}
 
 	adjacency := make(map[string][]string)
+	manifestNodeByPath := make(map[string]string)
 	foundLanguageGraph := false
 
 	if opts.language == langAuto || opts.language == langGo {
-		goAdj, ok, goErr := buildGoWorkspaceAdjacency(repoPath)
+		goAdj, goManifestNodes, ok, goErr := buildGoWorkspaceAdjacency(repoPath)
 		if goErr != nil {
 			return goErr
 		}
 		if ok {
 			foundLanguageGraph = true
 			mergeAdjacency(adjacency, goAdj)
+			mergeManifestNodes(manifestNodeByPath, goManifestNodes)
 		}
 	}
 
 	if opts.language == langAuto || opts.language == langRust {
-		rustAdj, ok, rustErr := buildRustWorkspaceAdjacency(repoPath)
+		rustAdj, rustManifestNodes, ok, rustErr := buildRustWorkspaceAdjacency(repoPath)
 		if rustErr != nil {
 			return rustErr
 		}
 		if ok {
 			foundLanguageGraph = true
 			mergeAdjacency(adjacency, rustAdj)
+			mergeManifestNodes(manifestNodeByPath, rustManifestNodes)
 		}
 	}
 
@@ -118,6 +123,21 @@ func runWorkspace(cmd *cobra.Command, opts *workspaceOptions) error {
 			return fmt.Errorf("no Go or Rust workspace metadata found under %s", repoPath)
 		}
 		return fmt.Errorf("no %s workspace metadata found under %s", opts.language, repoPath)
+	}
+
+	if opts.manifestPath != "" {
+		manifestPath := opts.manifestPath
+		if !filepath.IsAbs(manifestPath) {
+			manifestPath = filepath.Join(repoPath, manifestPath)
+		}
+		manifestPath = filepath.Clean(manifestPath)
+
+		targetNode, ok := manifestNodeByPath[manifestPath]
+		if !ok {
+			return fmt.Errorf("manifest not found in workspace graph: %s", opts.manifestPath)
+		}
+
+		adjacency = extractManifestDependencySubgraph(adjacency, targetNode)
 	}
 
 	graph, err := depgraph.NewDependencyGraphFromAdjacency(adjacency)
@@ -186,27 +206,36 @@ func mergeAdjacency(dst map[string][]string, src map[string][]string) {
 	}
 }
 
-func buildGoWorkspaceAdjacency(repoPath string) (map[string][]string, bool, error) {
+func mergeManifestNodes(dst map[string]string, src map[string]string) {
+	for manifestPath, node := range src {
+		dst[manifestPath] = node
+	}
+}
+
+func buildGoWorkspaceAdjacency(repoPath string) (map[string][]string, map[string]string, bool, error) {
 	moduleDirs, err := discoverGoWorkspaceModuleDirs(repoPath)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
 	if len(moduleDirs) == 0 {
-		return nil, false, nil
+		return nil, nil, false, nil
 	}
 
 	modulePathByDir := make(map[string]string, len(moduleDirs))
 	nodeIDByModulePath := make(map[string]string, len(moduleDirs))
+	manifestNodeByPath := make(map[string]string, len(moduleDirs))
 	for _, dir := range moduleDirs {
 		modulePath, err := parseGoModModuleName(filepath.Join(dir, "go.mod"))
 		if err != nil || modulePath == "" {
 			continue
 		}
 		modulePathByDir[dir] = modulePath
-		nodeIDByModulePath[modulePath] = "[go] " + modulePath
+		nodeID := "[go] " + modulePath
+		nodeIDByModulePath[modulePath] = nodeID
+		manifestNodeByPath[filepath.Clean(filepath.Join(dir, "go.mod"))] = nodeID
 	}
 	if len(modulePathByDir) == 0 {
-		return nil, false, nil
+		return nil, nil, false, nil
 	}
 
 	adj := make(map[string][]string, len(modulePathByDir))
@@ -218,7 +247,7 @@ func buildGoWorkspaceAdjacency(repoPath string) (map[string][]string, bool, erro
 
 		requires, replaceTargets, err := parseGoModDependencies(filepath.Join(dir, "go.mod"))
 		if err != nil {
-			return nil, false, err
+			return nil, nil, false, err
 		}
 		for _, reqPath := range requires {
 			if targetNode, ok := nodeIDByModulePath[reqPath]; ok {
@@ -238,7 +267,7 @@ func buildGoWorkspaceAdjacency(repoPath string) (map[string][]string, bool, erro
 		adj[sourceNode] = dedupeSorted(adj[sourceNode])
 	}
 
-	return adj, true, nil
+	return adj, manifestNodeByPath, true, nil
 }
 
 func discoverGoWorkspaceModuleDirs(repoPath string) ([]string, error) {
@@ -458,13 +487,13 @@ func trimGoComment(line string) string {
 	return trimmed
 }
 
-func buildRustWorkspaceAdjacency(repoPath string) (map[string][]string, bool, error) {
+func buildRustWorkspaceAdjacency(repoPath string) (map[string][]string, map[string]string, bool, error) {
 	manifestPaths, err := discoverCargoTomlFiles(repoPath)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
 	if len(manifestPaths) == 0 {
-		return nil, false, nil
+		return nil, nil, false, nil
 	}
 
 	type crateInfo struct {
@@ -473,23 +502,30 @@ func buildRustWorkspaceAdjacency(repoPath string) (map[string][]string, bool, er
 	}
 
 	crates := make(map[string]crateInfo)
+	crateManifestPath := make(map[string]string)
 	for _, manifest := range manifestPaths {
 		name, deps, err := parseCargoManifest(manifest)
 		if err != nil {
-			return nil, false, err
+			return nil, nil, false, err
 		}
 		if name == "" {
 			continue
 		}
 		crates[name] = crateInfo{name: name, deps: deps}
+		crateManifestPath[name] = filepath.Clean(manifest)
 	}
 	if len(crates) == 0 {
-		return nil, false, nil
+		return nil, nil, false, nil
 	}
 
 	nodeByCrate := make(map[string]string, len(crates))
+	manifestNodeByPath := make(map[string]string, len(crates))
 	for name := range crates {
-		nodeByCrate[name] = "[rust] " + name
+		nodeID := "[rust] " + name
+		nodeByCrate[name] = nodeID
+		if manifestPath, ok := crateManifestPath[name]; ok {
+			manifestNodeByPath[manifestPath] = nodeID
+		}
 	}
 
 	adj := make(map[string][]string, len(crates))
@@ -506,7 +542,37 @@ func buildRustWorkspaceAdjacency(repoPath string) (map[string][]string, bool, er
 		adj[sourceNode] = dedupeSorted(adj[sourceNode])
 	}
 
-	return adj, true, nil
+	return adj, manifestNodeByPath, true, nil
+}
+
+func extractManifestDependencySubgraph(adjacency map[string][]string, targetNode string) map[string][]string {
+	seen := map[string]bool{targetNode: true}
+	queue := []string{targetNode}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		for _, next := range adjacency[current] {
+			if seen[next] {
+				continue
+			}
+			seen[next] = true
+			queue = append(queue, next)
+		}
+	}
+
+	pruned := make(map[string][]string, len(seen))
+	for node := range seen {
+		deps := adjacency[node]
+		filtered := make([]string, 0, len(deps))
+		for _, dep := range deps {
+			if seen[dep] {
+				filtered = append(filtered, dep)
+			}
+		}
+		pruned[node] = filtered
+	}
+
+	return pruned
 }
 
 func discoverCargoTomlFiles(repoPath string) ([]string, error) {
