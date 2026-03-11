@@ -204,3 +204,107 @@ func TestResolveRustProjectImports_DoesNotReturnSelfDependency(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, imports, astgrepFile)
 }
+
+func TestResolveRustProjectImports_CrossCratePathDependency(t *testing.T) {
+	tmpDir := t.TempDir()
+	workspaceRoot := filepath.Join(tmpDir, "workspace")
+	crateADir := filepath.Join(workspaceRoot, "crate-a")
+	crateBDir := filepath.Join(workspaceRoot, "crate-b")
+	crateASrc := filepath.Join(crateADir, "src")
+	crateBSrc := filepath.Join(crateBDir, "src")
+	require.NoError(t, os.MkdirAll(crateASrc, 0755))
+	require.NoError(t, os.MkdirAll(crateBSrc, 0755))
+
+	crateACargo := filepath.Join(crateADir, "Cargo.toml")
+	crateAMain := filepath.Join(crateASrc, "main.rs")
+	crateBCargo := filepath.Join(crateBDir, "Cargo.toml")
+	crateBLib := filepath.Join(crateBSrc, "lib.rs")
+	crateBFoo := filepath.Join(crateBSrc, "foo.rs")
+
+	require.NoError(t, os.WriteFile(crateACargo, []byte(`
+[package]
+name = "crate-a"
+version = "0.1.0"
+
+[dependencies]
+crate-b = { path = "../crate-b" }
+`), 0644))
+	require.NoError(t, os.WriteFile(crateAMain, []byte(`
+use crate_b::foo::run;
+
+fn main() {
+    run();
+}
+`), 0644))
+
+	require.NoError(t, os.WriteFile(crateBCargo, []byte(`
+[package]
+name = "crate-b"
+version = "0.1.0"
+`), 0644))
+	require.NoError(t, os.WriteFile(crateBLib, []byte("pub mod foo;\n"), 0644))
+	require.NoError(t, os.WriteFile(crateBFoo, []byte("pub fn run() {}\n"), 0644))
+
+	supplied := map[string]bool{
+		crateACargo: true,
+		crateAMain:  true,
+		crateBCargo: true,
+		crateBLib:   true,
+		crateBFoo:   true,
+	}
+
+	imports, err := ResolveRustProjectImports(crateAMain, crateAMain, supplied, os.ReadFile)
+	require.NoError(t, err)
+	assert.Contains(t, imports, crateBFoo)
+}
+
+func TestResolveRustProjectImports_CrossCratePathDependency_QualifiedCallWithoutUse(t *testing.T) {
+	tmpDir := t.TempDir()
+	workspaceRoot := filepath.Join(tmpDir, "workspace")
+	crateADir := filepath.Join(workspaceRoot, "crate-a")
+	crateBDir := filepath.Join(workspaceRoot, "crate-b")
+	crateASrc := filepath.Join(crateADir, "src")
+	crateBSrc := filepath.Join(crateBDir, "src")
+	require.NoError(t, os.MkdirAll(crateASrc, 0755))
+	require.NoError(t, os.MkdirAll(crateBSrc, 0755))
+
+	crateACargo := filepath.Join(crateADir, "Cargo.toml")
+	crateAMain := filepath.Join(crateASrc, "main.rs")
+	crateBCargo := filepath.Join(crateBDir, "Cargo.toml")
+	crateBLib := filepath.Join(crateBSrc, "lib.rs")
+	crateBFoo := filepath.Join(crateBSrc, "foo.rs")
+
+	require.NoError(t, os.WriteFile(crateACargo, []byte(`
+[package]
+name = "crate-a"
+version = "0.1.0"
+
+[dependencies]
+crate-b = { path = "../crate-b" }
+`), 0644))
+	require.NoError(t, os.WriteFile(crateAMain, []byte(`
+fn main() {
+    crate_b::foo::run();
+}
+`), 0644))
+
+	require.NoError(t, os.WriteFile(crateBCargo, []byte(`
+[package]
+name = "crate-b"
+version = "0.1.0"
+`), 0644))
+	require.NoError(t, os.WriteFile(crateBLib, []byte("pub mod foo;\n"), 0644))
+	require.NoError(t, os.WriteFile(crateBFoo, []byte("pub fn run() {}\n"), 0644))
+
+	supplied := map[string]bool{
+		crateACargo: true,
+		crateAMain:  true,
+		crateBCargo: true,
+		crateBLib:   true,
+		crateBFoo:   true,
+	}
+
+	imports, err := ResolveRustProjectImports(crateAMain, crateAMain, supplied, os.ReadFile)
+	require.NoError(t, err)
+	assert.Contains(t, imports, crateBFoo)
+}

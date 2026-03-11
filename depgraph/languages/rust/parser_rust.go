@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -13,7 +14,7 @@ import (
 )
 
 var (
-	rustLanguage = rust.GetLanguage()
+	rustLanguage   = rust.GetLanguage()
 	rustParserPool = sync.Pool{
 		New: func() any {
 			parser := sitter.NewParser()
@@ -21,6 +22,7 @@ var (
 			return parser
 		},
 	}
+	rustQualifiedPathPattern = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)+`)
 )
 
 // RustImportKind describes the type of Rust import-like declaration.
@@ -50,25 +52,31 @@ func RustImports(filePath string) ([]RustImport, error) {
 
 // ParseRustImports parses Rust source code and extracts imports.
 func ParseRustImports(sourceCode []byte) ([]RustImport, error) {
+	var imports []RustImport
+
 	if os.Getenv("CLARITY_RUST_IMPORTS_PARSER") != "tree" {
-		imports, _ := parseRustImportsFast(sourceCode)
-		return imports, nil
+		imports, _ = parseRustImportsFast(sourceCode)
+	} else {
+		parser, _ := rustParserPool.Get().(*sitter.Parser)
+		if parser == nil {
+			parser = sitter.NewParser()
+			parser.SetLanguage(rustLanguage)
+		}
+		defer rustParserPool.Put(parser)
+
+		tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse Rust code: %w", err)
+		}
+		defer tree.Close()
+
+		imports = extractImports(tree.RootNode(), sourceCode)
 	}
 
-	parser, _ := rustParserPool.Get().(*sitter.Parser)
-	if parser == nil {
-		parser = sitter.NewParser()
-		parser.SetLanguage(rustLanguage)
-	}
-	defer rustParserPool.Put(parser)
+	// Also capture crate-qualified path usage in expressions/types, not only `use` declarations.
+	imports = append(imports, parseRustQualifiedPathRefsFast(sourceCode)...)
 
-	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse Rust code: %w", err)
-	}
-	defer tree.Close()
-
-	return extractImports(tree.RootNode(), sourceCode), nil
+	return dedupeRustImports(imports), nil
 }
 
 func parseRustImportsFast(sourceCode []byte) ([]RustImport, bool) {
@@ -315,6 +323,196 @@ func leadingRustIdentBytes(s []byte) []byte {
 
 func isLikelyUsePrefix(stmt []byte) bool {
 	return bytes.Contains(stmt, []byte("use "))
+}
+
+func parseRustQualifiedPathRefsFast(sourceCode []byte) []RustImport {
+	cleaned := sanitizeRustSourceForPathMatching(sourceCode)
+	matches := rustQualifiedPathPattern.FindAllIndex(cleaned, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+
+	refs := make([]RustImport, 0, len(matches))
+	for _, m := range matches {
+		start, end := m[0], m[1]
+		if isUsePathReference(cleaned, start) {
+			continue
+		}
+		path := strings.TrimPrefix(string(cleaned[start:end]), "::")
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+		refs = append(refs, RustImport{Path: path, Kind: RustImportUse})
+	}
+	return refs
+}
+
+func sanitizeRustSourceForPathMatching(sourceCode []byte) []byte {
+	cleaned := make([]byte, len(sourceCode))
+	copy(cleaned, sourceCode)
+
+	inLineComment := false
+	inBlockComment := 0
+	inString := false
+	inChar := false
+	escaped := false
+
+	for i := 0; i < len(sourceCode); i++ {
+		c := sourceCode[i]
+		next := byte(0)
+		if i+1 < len(sourceCode) {
+			next = sourceCode[i+1]
+		}
+
+		if inLineComment {
+			if c == '\n' {
+				inLineComment = false
+				cleaned[i] = '\n'
+			} else {
+				cleaned[i] = ' '
+			}
+			continue
+		}
+
+		if inBlockComment > 0 {
+			cleaned[i] = ' '
+			if c == '/' && next == '*' {
+				cleaned[i+1] = ' '
+				inBlockComment++
+				i++
+				continue
+			}
+			if c == '*' && next == '/' {
+				cleaned[i+1] = ' '
+				inBlockComment--
+				i++
+			}
+			continue
+		}
+
+		if inString {
+			cleaned[i] = ' '
+			if escaped {
+				escaped = false
+				continue
+			}
+			switch c {
+			case '\\':
+				escaped = true
+			case '"':
+				inString = false
+			}
+			continue
+		}
+
+		if inChar {
+			cleaned[i] = ' '
+			if escaped {
+				escaped = false
+				continue
+			}
+			switch c {
+			case '\\':
+				escaped = true
+			case '\'':
+				inChar = false
+			}
+			continue
+		}
+
+		if c == '/' && next == '/' {
+			cleaned[i] = ' '
+			cleaned[i+1] = ' '
+			inLineComment = true
+			i++
+			continue
+		}
+		if c == '/' && next == '*' {
+			cleaned[i] = ' '
+			cleaned[i+1] = ' '
+			inBlockComment = 1
+			i++
+			continue
+		}
+		if c == '"' {
+			cleaned[i] = ' '
+			inString = true
+			continue
+		}
+		if c == '\'' {
+			cleaned[i] = ' '
+			inChar = true
+			continue
+		}
+	}
+
+	return cleaned
+}
+
+func isUsePathReference(cleaned []byte, start int) bool {
+	i := start - 1
+	for i >= 0 && isRustWhitespace(cleaned[i]) {
+		i--
+	}
+	if i < 0 {
+		return false
+	}
+
+	if cleaned[i] == ')' {
+		depth := 1
+		i--
+		for i >= 0 && depth > 0 {
+			switch cleaned[i] {
+			case ')':
+				depth++
+			case '(':
+				depth--
+			}
+			i--
+		}
+		for i >= 0 && isRustWhitespace(cleaned[i]) {
+			i--
+		}
+	}
+
+	if i < 0 {
+		return false
+	}
+
+	startTok := i
+	for startTok >= 0 && isRustIdentChar(cleaned[startTok]) {
+		startTok--
+	}
+	token := string(cleaned[startTok+1 : i+1])
+	return token == "use"
+}
+
+func isRustWhitespace(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
+}
+
+func isRustIdentChar(c byte) bool {
+	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+}
+
+func dedupeRustImports(imports []RustImport) []RustImport {
+	if len(imports) == 0 {
+		return nil
+	}
+	seen := make(map[RustImport]bool, len(imports))
+	result := make([]RustImport, 0, len(imports))
+	for _, imp := range imports {
+		if imp.Path == "" {
+			continue
+		}
+		if seen[imp] {
+			continue
+		}
+		seen[imp] = true
+		result = append(result, imp)
+	}
+	return result
 }
 
 func parseTopLevelRustImportStatement(stmt string) (RustImport, bool) {

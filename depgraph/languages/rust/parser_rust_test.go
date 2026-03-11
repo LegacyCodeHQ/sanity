@@ -9,6 +9,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func importKey(path string, kind RustImportKind) RustImport {
+	return RustImport{Path: path, Kind: kind}
+}
+
 func TestParseRustImports(t *testing.T) {
 	source := `
 use std::io;
@@ -82,4 +86,23 @@ pub mod public_mod;
 	assert.Equal(t, RustImportUse, imports[0].Kind)
 	assert.Equal(t, "public_mod", imports[1].Path)
 	assert.Equal(t, RustImportModDecl, imports[1].Kind)
+}
+
+func TestParseRustImports_CollectsQualifiedPathReferences(t *testing.T) {
+	source := `
+use crate::alpha::beta;
+
+fn run() {
+  crate_b::foo::run();
+  crate::core::do_work();
+  let x = "crate_b::ignored::in_string";
+  // crate_b::ignored::in_comment
+}
+`
+	imports, err := ParseRustImports([]byte(source))
+	require.NoError(t, err)
+
+	assert.Contains(t, imports, importKey("crate_b::foo::run", RustImportUse))
+	assert.Contains(t, imports, importKey("crate::core::do_work", RustImportUse))
+	assert.Contains(t, imports, importKey("crate::alpha::beta", RustImportUse))
 }
