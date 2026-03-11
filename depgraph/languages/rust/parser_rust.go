@@ -157,6 +157,9 @@ func parseRustImportsFast(sourceCode []byte) ([]RustImport, bool) {
 			continue
 		}
 		if c == '\'' {
+			if isRustLifetimeStart(sourceCode, i) && !looksLikeRustCharLiteralStart(sourceCode, i) {
+				continue
+			}
 			inChar = true
 			continue
 		}
@@ -441,6 +444,9 @@ func sanitizeRustSourceForPathMatching(sourceCode []byte) []byte {
 			continue
 		}
 		if c == '\'' {
+			if isRustLifetimeStart(sourceCode, i) && !looksLikeRustCharLiteralStart(sourceCode, i) {
+				continue
+			}
 			cleaned[i] = ' '
 			inChar = true
 			continue
@@ -496,6 +502,36 @@ func isRustIdentChar(c byte) bool {
 	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
 }
 
+func isRustLifetimeStart(source []byte, idx int) bool {
+	if idx+1 >= len(source) || !isRustIdentChar(source[idx+1]) {
+		return false
+	}
+
+	prev := previousNonWhitespaceByte(source, idx)
+	switch prev {
+	case '&', '<', '>', ',', ':', '+', '(':
+		return true
+	default:
+		return false
+	}
+}
+
+func previousNonWhitespaceByte(source []byte, idx int) byte {
+	for i := idx - 1; i >= 0; i-- {
+		if !isRustWhitespace(source[i]) {
+			return source[i]
+		}
+	}
+	return 0
+}
+
+func looksLikeRustCharLiteralStart(source []byte, idx int) bool {
+	if idx+2 < len(source) && source[idx+2] == '\'' {
+		return true
+	}
+	return idx+3 < len(source) && source[idx+1] == '\\' && source[idx+3] == '\''
+}
+
 func dedupeRustImports(imports []RustImport) []RustImport {
 	if len(imports) == 0 {
 		return nil
@@ -513,121 +549,6 @@ func dedupeRustImports(imports []RustImport) []RustImport {
 		result = append(result, imp)
 	}
 	return result
-}
-
-func parseTopLevelRustImportStatement(stmt string) (RustImport, bool) {
-	s := strings.TrimSpace(stmt)
-	if s == "" {
-		return RustImport{}, false
-	}
-	s = stripLeadingRustAttributes(s)
-	if s == "" {
-		return RustImport{}, false
-	}
-
-	s = stripRustVisibilityPrefix(s)
-	switch {
-	case strings.HasPrefix(s, "use "):
-		path := normalizeUsePath(strings.TrimSpace(strings.TrimPrefix(s, "use ")))
-		if path == "" {
-			return RustImport{}, false
-		}
-		return RustImport{Path: path, Kind: RustImportUse}, true
-	case strings.HasPrefix(s, "extern crate "):
-		name := leadingRustIdent(strings.TrimSpace(strings.TrimPrefix(s, "extern crate ")))
-		if name == "" {
-			return RustImport{}, false
-		}
-		return RustImport{Path: name, Kind: RustImportExternCrate}, true
-	case strings.HasPrefix(s, "mod "):
-		name := leadingRustIdent(strings.TrimSpace(strings.TrimPrefix(s, "mod ")))
-		if name == "" {
-			return RustImport{}, false
-		}
-		return RustImport{Path: name, Kind: RustImportModDecl}, true
-	default:
-		return RustImport{}, false
-	}
-}
-
-func stripLeadingRustAttributes(s string) string {
-	trimmed := strings.TrimSpace(s)
-	for strings.HasPrefix(trimmed, "#[") || strings.HasPrefix(trimmed, "#![") {
-		open := strings.Index(trimmed, "[")
-		if open < 0 {
-			return trimmed
-		}
-		level := 0
-		end := -1
-		for i := open; i < len(trimmed); i++ {
-			switch trimmed[i] {
-			case '[':
-				level++
-			case ']':
-				level--
-				if level == 0 {
-					end = i
-					break
-				}
-			}
-		}
-		if end < 0 {
-			return trimmed
-		}
-		trimmed = strings.TrimSpace(trimmed[end+1:])
-	}
-	return trimmed
-}
-
-func stripRustVisibilityPrefix(s string) string {
-	trimmed := strings.TrimSpace(s)
-	if strings.HasPrefix(trimmed, "pub ") {
-		return strings.TrimSpace(strings.TrimPrefix(trimmed, "pub "))
-	}
-	if strings.HasPrefix(trimmed, "pub(") {
-		if idx := strings.Index(trimmed, ")"); idx >= 0 {
-			return strings.TrimSpace(trimmed[idx+1:])
-		}
-	}
-	return trimmed
-}
-
-func normalizeUsePath(expr string) string {
-	path := strings.TrimSpace(expr)
-	if path == "" {
-		return ""
-	}
-	if idx := strings.Index(path, " as "); idx >= 0 {
-		path = strings.TrimSpace(path[:idx])
-	}
-	if idx := strings.Index(path, "{"); idx >= 0 {
-		path = strings.TrimSpace(path[:idx])
-	}
-	for strings.HasSuffix(path, "::") {
-		path = strings.TrimSuffix(path, "::")
-		path = strings.TrimSpace(path)
-	}
-	path = strings.TrimPrefix(path, "::")
-	return strings.TrimSpace(path)
-}
-
-func leadingRustIdent(s string) string {
-	if s == "" {
-		return ""
-	}
-	i := 0
-	for i < len(s) {
-		c := s[i]
-		if c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (i > 0 && c >= '0' && c <= '9') {
-			i++
-			continue
-		}
-		break
-	}
-	if i == 0 {
-		return ""
-	}
-	return s[:i]
 }
 
 func extractImports(rootNode *sitter.Node, sourceCode []byte) []RustImport {
