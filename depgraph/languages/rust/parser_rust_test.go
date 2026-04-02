@@ -112,13 +112,13 @@ func TestParseRustImports_CollectsQualifiedPathsWhenLifetimesPresent(t *testing.
 const fn marker() -> &'static str { "ok" }
 
 fn run() {
-  s7e_parser::analyze();
-  s7e_flow::build_flow_graph();
+  s8_parser::analyze();
+  s8_flow::build_flow_graph();
 }
 `
 	imports, err := ParseRustImports([]byte(source))
 	require.NoError(t, err)
 
-	assert.Contains(t, imports, importKey("s7e_parser::analyze", RustImportUse))
-	assert.Contains(t, imports, importKey("s7e_flow::build_flow_graph", RustImportUse))
+	assert.Contains(t, imports, importKey("s8_parser::analyze", RustImportUse))
+	assert.Contains(t, imports, importKey("s8_flow::build_flow_graph", RustImportUse))
 }
