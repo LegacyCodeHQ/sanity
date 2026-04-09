@@ -167,50 +167,49 @@ func extractImportsFast(sourceCode []byte) []TypeScriptImport {
 		return []TypeScriptImport{}
 	}
 
-	source := string(sourceCode)
 	imports := make([]TypeScriptImport, 0, 8)
 
-	for _, m := range typeImportFromRE.FindAllStringSubmatch(source, -1) {
+	for _, m := range typeImportFromRE.FindAllSubmatch(sourceCode, -1) {
 		if len(m) < 2 {
 			continue
 		}
-		importPath := cleanImportPath(m[1])
+		importPath := cleanImportPath(string(m[1]))
 		if importPath == "" {
 			continue
 		}
 		imports = append(imports, classifyTypeScriptImport(importPath, true))
 	}
 
-	for _, m := range importFromRE.FindAllStringSubmatch(source, -1) {
+	for _, m := range importFromRE.FindAllSubmatch(sourceCode, -1) {
 		if len(m) < 2 {
 			continue
 		}
-		if strings.HasPrefix(strings.TrimSpace(m[0]), "import type") {
+		if bytes.HasPrefix(bytes.TrimSpace(m[0]), []byte("import type")) {
 			continue
 		}
-		importPath := cleanImportPath(m[1])
+		importPath := cleanImportPath(string(m[1]))
 		if importPath == "" {
 			continue
 		}
 		imports = append(imports, classifyTypeScriptImport(importPath, false))
 	}
 
-	for _, m := range sideEffectRE.FindAllStringSubmatch(source, -1) {
+	for _, m := range sideEffectRE.FindAllSubmatch(sourceCode, -1) {
 		if len(m) < 2 {
 			continue
 		}
-		importPath := cleanImportPath(m[1])
+		importPath := cleanImportPath(string(m[1]))
 		if importPath == "" {
 			continue
 		}
 		imports = append(imports, classifyTypeScriptImport(importPath, false))
 	}
 
-	for _, m := range exportFromRE.FindAllStringSubmatch(source, -1) {
+	for _, m := range exportFromRE.FindAllSubmatch(sourceCode, -1) {
 		if len(m) < 2 {
 			continue
 		}
-		importPath := cleanImportPath(m[1])
+		importPath := cleanImportPath(string(m[1]))
 		if importPath == "" {
 			continue
 		}
