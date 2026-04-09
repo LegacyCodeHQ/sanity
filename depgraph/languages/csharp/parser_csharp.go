@@ -6,9 +6,21 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	tscsharp "github.com/smacker/go-tree-sitter/csharp"
+)
+
+var (
+	csharpLanguage = tscsharp.GetLanguage()
+	csharpParserPool = sync.Pool{
+		New: func() any {
+			parser := sitter.NewParser()
+			parser.SetLanguage(csharpLanguage)
+			return parser
+		},
+	}
 )
 
 // CSharpImport represents a using directive.
@@ -29,23 +41,31 @@ func CSharpImports(filePath string) ([]CSharpImport, error) {
 // ParseCSharpImports parses C# source code and extracts using directives.
 func ParseCSharpImports(source string) []CSharpImport {
 	sourceCode := []byte(source)
-	tree, err := parseCSharpTree(sourceCode)
+	tree, cleanup, err := parseCSharpTree(sourceCode)
 	if err != nil {
 		return parseCSharpImportsFallback(source)
 	}
-	defer tree.Close()
+	defer cleanup()
 
 	return extractUsingDirectives(tree.RootNode(), sourceCode)
 }
 
-func parseCSharpTree(sourceCode []byte) (*sitter.Tree, error) {
-	parser := sitter.NewParser()
-	parser.SetLanguage(tscsharp.GetLanguage())
+func parseCSharpTree(sourceCode []byte) (*sitter.Tree, func(), error) {
+	parser, _ := csharpParserPool.Get().(*sitter.Parser)
+	if parser == nil {
+		parser = sitter.NewParser()
+		parser.SetLanguage(csharpLanguage)
+	}
 	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse C# code: %w", err)
+		csharpParserPool.Put(parser)
+		return nil, nil, fmt.Errorf("failed to parse C# code: %w", err)
 	}
-	return tree, nil
+	cleanup := func() {
+		tree.Close()
+		csharpParserPool.Put(parser)
+	}
+	return tree, cleanup, nil
 }
 
 func extractUsingDirectives(root *sitter.Node, sourceCode []byte) []CSharpImport {
@@ -128,9 +148,9 @@ var csharpTypeIdentifierPattern = regexp.MustCompile(`\b[A-Z][A-Za-z0-9_]*\b`)
 // ParseCSharpNamespace extracts the file namespace declaration.
 func ParseCSharpNamespace(source string) string {
 	sourceCode := []byte(source)
-	tree, err := parseCSharpTree(sourceCode)
+	tree, cleanup, err := parseCSharpTree(sourceCode)
 	if err == nil {
-		defer tree.Close()
+		defer cleanup()
 		namespace := extractNamespace(tree.RootNode(), sourceCode)
 		if namespace != "" {
 			return namespace
@@ -146,9 +166,9 @@ func ParseCSharpNamespace(source string) string {
 // ParseTopLevelCSharpTypeNames extracts top-level type names declared in a file.
 func ParseTopLevelCSharpTypeNames(source string) []string {
 	sourceCode := []byte(source)
-	tree, err := parseCSharpTree(sourceCode)
+	tree, cleanup, err := parseCSharpTree(sourceCode)
 	if err == nil {
-		defer tree.Close()
+		defer cleanup()
 		return extractTopLevelTypeNames(tree.RootNode(), sourceCode)
 	}
 
@@ -278,9 +298,9 @@ func extractDeclarationName(node *sitter.Node, sourceCode []byte) string {
 // ExtractCSharpTypeIdentifiers extracts likely type identifiers from code references.
 func ExtractCSharpTypeIdentifiers(source string) []string {
 	sourceCode := []byte(source)
-	tree, err := parseCSharpTree(sourceCode)
+	tree, cleanup, err := parseCSharpTree(sourceCode)
 	if err == nil {
-		defer tree.Close()
+		defer cleanup()
 		identifiers := extractTypeIdentifiersFromTree(tree.RootNode(), sourceCode)
 		if len(identifiers) > 0 {
 			return identifiers
