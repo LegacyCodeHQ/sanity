@@ -29,4 +29,5 @@ cmd/watch/dist/
 Thumbs.db
 
 .compass/
+.dyno/
 runs/
