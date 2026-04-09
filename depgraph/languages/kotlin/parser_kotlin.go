@@ -269,11 +269,11 @@ func queryKotlinImports(rootNode *sitter.Node, sourceCode []byte, pattern string
 	return imports, nil
 }
 
+var kotlinImportFullTextPattern = regexp.MustCompile(`import\s+([\w.*]+)(?:\s+as\s+\w+)?`)
+
 // extractImportFromFullText extracts the import path from a full import statement
 func extractImportFromFullText(text string) string {
-	// Match pattern: import <path> [as <alias>]
-	re := regexp.MustCompile(`import\s+([\w.*]+)(?:\s+as\s+\w+)?`)
-	matches := re.FindStringSubmatch(text)
+	matches := kotlinImportFullTextPattern.FindStringSubmatch(text)
 	if len(matches) > 1 {
 		return matches[1]
 	}
@@ -340,10 +340,11 @@ func queryPackageName(rootNode *sitter.Node, sourceCode []byte) (string, error) 
 	return "", fmt.Errorf("no package name captured")
 }
 
+var kotlinPackagePattern = regexp.MustCompile(`package\s+([\w.]+)`)
+
 // extractPackageWithRegex extracts package declaration using regex as fallback
 func extractPackageWithRegex(sourceCode []byte) string {
-	re := regexp.MustCompile(`package\s+([\w.]+)`)
-	matches := re.FindSubmatch(sourceCode)
+	matches := kotlinPackagePattern.FindSubmatch(sourceCode)
 	if len(matches) > 1 {
 		return string(matches[1])
 	}
