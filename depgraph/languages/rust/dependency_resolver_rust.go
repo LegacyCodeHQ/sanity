@@ -104,12 +104,20 @@ func (r *ProjectImportResolver) resolveRustUsePath(sourceFile, importPath string
 	case "self", "super":
 		parts = strings.Split(path, "::")
 		baseDir = filepath.Dir(sourceFile)
+		// For leaf .rs files (not mod.rs/lib.rs/main.rs), the file is a
+		// child of the directory module. baseDir already points to the
+		// parent module's directory, so the first `super` is a no-op.
+		leafFile := !isRustDirectoryModuleFile(sourceFile)
 		for len(parts) > 0 {
 			switch parts[0] {
 			case "self":
 				parts = parts[1:]
 			case "super":
-				baseDir = filepath.Dir(baseDir)
+				if leafFile {
+					leafFile = false
+				} else {
+					baseDir = filepath.Dir(baseDir)
+				}
 				parts = parts[1:]
 			default:
 				goto resolved
@@ -538,6 +546,11 @@ func dedupeNonEmptyStrings(values []string) []string {
 
 func normalizeCargoCrateName(name string) string {
 	return strings.ReplaceAll(name, "-", "_")
+}
+
+func isRustDirectoryModuleFile(path string) bool {
+	base := filepath.Base(path)
+	return base == "mod.rs" || base == "lib.rs" || base == "main.rs"
 }
 
 func firstRustPathSegment(path string) string {

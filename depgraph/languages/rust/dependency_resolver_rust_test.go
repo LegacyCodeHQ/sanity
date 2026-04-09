@@ -258,6 +258,38 @@ version = "0.1.0"
 	assert.Contains(t, imports, crateBFoo)
 }
 
+func TestResolveRustProjectImports_UseSuperFromNonModFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	crateRoot := filepath.Join(tmpDir, "mycrate")
+	srcDir := filepath.Join(crateRoot, "src")
+	fsDir := filepath.Join(srcDir, "fs")
+	require.NoError(t, os.MkdirAll(fsDir, 0755))
+
+	cargoToml := filepath.Join(crateRoot, "Cargo.toml")
+	libFile := filepath.Join(srcDir, "lib.rs")
+	fsMod := filepath.Join(fsDir, "mod.rs")
+	traitFsFile := filepath.Join(fsDir, "trait_fs.rs")
+	realFsFile := filepath.Join(fsDir, "real_fs.rs")
+
+	require.NoError(t, os.WriteFile(cargoToml, []byte("[package]\nname = \"mycrate\"\n"), 0644))
+	require.NoError(t, os.WriteFile(libFile, []byte("mod fs;\n"), 0644))
+	require.NoError(t, os.WriteFile(fsMod, []byte("mod trait_fs;\nmod real_fs;\n"), 0644))
+	require.NoError(t, os.WriteFile(traitFsFile, []byte("pub trait Fs {}\n"), 0644))
+	require.NoError(t, os.WriteFile(realFsFile, []byte("use super::trait_fs::Fs;\npub struct RealFs;\nimpl Fs for RealFs {}\n"), 0644))
+
+	supplied := map[string]bool{
+		cargoToml:   true,
+		libFile:     true,
+		fsMod:       true,
+		traitFsFile: true,
+		realFsFile:  true,
+	}
+
+	imports, err := ResolveRustProjectImports(realFsFile, realFsFile, supplied, os.ReadFile)
+	require.NoError(t, err)
+	assert.Contains(t, imports, traitFsFile, "use super::trait_fs::Fs from real_fs.rs should resolve to trait_fs.rs")
+}
+
 func TestResolveRustProjectImports_CrossCratePathDependency_QualifiedCallWithoutUse(t *testing.T) {
 	tmpDir := t.TempDir()
 	workspaceRoot := filepath.Join(tmpDir, "workspace")
