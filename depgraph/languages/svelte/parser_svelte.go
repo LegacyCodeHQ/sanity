@@ -3,6 +3,7 @@ package svelte
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/svelte"
@@ -10,15 +11,28 @@ import (
 	"github.com/LegacyCodeHQ/clarity/depgraph/languages/javascript"
 )
 
+var (
+	svelteLanguage   = svelte.GetLanguage()
+	svelteParserPool = sync.Pool{
+		New: func() any {
+			parser := sitter.NewParser()
+			parser.SetLanguage(svelteLanguage)
+			return parser
+		},
+	}
+)
+
 // ParseSvelteImports parses a Svelte file and extracts JavaScript imports
 // from its <script> blocks.
 func ParseSvelteImports(sourceCode []byte) ([]javascript.JavaScriptImport, error) {
-	lang := svelte.GetLanguage()
-
-	parser := sitter.NewParser()
-	parser.SetLanguage(lang)
+	parser, _ := svelteParserPool.Get().(*sitter.Parser)
+	if parser == nil {
+		parser = sitter.NewParser()
+		parser.SetLanguage(svelteLanguage)
+	}
 
 	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
+	svelteParserPool.Put(parser)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse Svelte code: %w", err)
 	}
