@@ -4,12 +4,14 @@
 
 # application binary
 clarity
+clarity.optimized
 bin/clarity
 bin/clarity.exe
 
 # coverage files
 coverage.out
 coverage.html
+cover.out
 .gotools/
 coverage.tmp
 *.coverprofile
