@@ -7,9 +7,21 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/cpp"
+)
+
+var (
+	cppLanguage   = cpp.GetLanguage()
+	cppParserPool = sync.Pool{
+		New: func() any {
+			parser := sitter.NewParser()
+			parser.SetLanguage(cppLanguage)
+			return parser
+		},
+	}
 )
 
 // IncludeKind distinguishes between system and local includes.
@@ -38,10 +50,12 @@ func CppIncludes(filePath string) ([]Include, error) {
 
 // ParseCppIncludes parses C++ source code and extracts includes.
 func ParseCppIncludes(sourceCode []byte) ([]Include, error) {
-	lang := cpp.GetLanguage()
-
-	parser := sitter.NewParser()
-	parser.SetLanguage(lang)
+	parser, _ := cppParserPool.Get().(*sitter.Parser)
+	if parser == nil {
+		parser = sitter.NewParser()
+		parser.SetLanguage(cppLanguage)
+	}
+	defer cppParserPool.Put(parser)
 
 	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
 	if err != nil {
