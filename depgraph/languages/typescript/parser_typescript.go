@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/typescript/tsx"
@@ -60,6 +61,59 @@ func (i InternalImport) Path() string {
 
 func (i InternalImport) IsTypeOnly() bool {
 	return i.isTypeOnly
+}
+
+const tsImportQueryPattern = `
+(import_statement
+  source: (string) @import.source)
+`
+
+const tsExportQueryPattern = `
+(export_statement
+  source: (string) @export.source)
+`
+
+var (
+	tsTypescriptLang  = typescript.GetLanguage()
+	tsTSXLang         = tsx.GetLanguage()
+	tsImportQueryTS   *sitter.Query
+	tsExportQueryTS   *sitter.Query
+	tsImportQueryTSX  *sitter.Query
+	tsExportQueryTSX  *sitter.Query
+	tsParserPoolTS    = sync.Pool{
+		New: func() any {
+			p := sitter.NewParser()
+			p.SetLanguage(tsTypescriptLang)
+			return p
+		},
+	}
+	tsParserPoolTSX = sync.Pool{
+		New: func() any {
+			p := sitter.NewParser()
+			p.SetLanguage(tsTSXLang)
+			return p
+		},
+	}
+)
+
+func init() {
+	var err error
+	tsImportQueryTS, err = sitter.NewQuery([]byte(tsImportQueryPattern), tsTypescriptLang)
+	if err != nil {
+		panic("failed to compile ts import query: " + err.Error())
+	}
+	tsExportQueryTS, err = sitter.NewQuery([]byte(tsExportQueryPattern), tsTypescriptLang)
+	if err != nil {
+		panic("failed to compile ts export query: " + err.Error())
+	}
+	tsImportQueryTSX, err = sitter.NewQuery([]byte(tsImportQueryPattern), tsTSXLang)
+	if err != nil {
+		panic("failed to compile tsx import query: " + err.Error())
+	}
+	tsExportQueryTSX, err = sitter.NewQuery([]byte(tsExportQueryPattern), tsTSXLang)
+	if err != nil {
+		panic("failed to compile tsx export query: " + err.Error())
+	}
 }
 
 // nodeBuiltins contains known Node.js built-in module names
@@ -143,15 +197,25 @@ func ParseTypeScriptImports(sourceCode []byte, isTSX bool) ([]TypeScriptImport, 
 		return fast, nil
 	}
 
-	var lang *sitter.Language
+	var pool *sync.Pool
 	if isTSX {
-		lang = tsx.GetLanguage()
+		pool = &tsParserPoolTSX
 	} else {
-		lang = typescript.GetLanguage()
+		pool = &tsParserPoolTS
 	}
 
-	parser := sitter.NewParser()
-	parser.SetLanguage(lang)
+	parser, _ := pool.Get().(*sitter.Parser)
+	if parser == nil {
+		var lang *sitter.Language
+		if isTSX {
+			lang = tsTSXLang
+		} else {
+			lang = tsTypescriptLang
+		}
+		parser = sitter.NewParser()
+		parser.SetLanguage(lang)
+	}
+	defer pool.Put(parser)
 
 	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
 	if err != nil {
@@ -159,7 +223,7 @@ func ParseTypeScriptImports(sourceCode []byte, isTSX bool) ([]TypeScriptImport, 
 	}
 	defer tree.Close()
 
-	return extractImportsFromTree(tree.RootNode(), sourceCode, lang)
+	return extractImportsFromTree(tree.RootNode(), sourceCode, isTSX)
 }
 
 func extractImportsFast(sourceCode []byte) []TypeScriptImport {
@@ -220,29 +284,29 @@ func extractImportsFast(sourceCode []byte) []TypeScriptImport {
 }
 
 // extractImportsFromTree walks the AST and extracts imports
-func extractImportsFromTree(rootNode *sitter.Node, sourceCode []byte, lang *sitter.Language) ([]TypeScriptImport, error) {
+func extractImportsFromTree(rootNode *sitter.Node, sourceCode []byte, isTSX bool) ([]TypeScriptImport, error) {
 	var imports []TypeScriptImport
 
-	// Query for import statements: import ... from 'module'
-	importQuery := `
-(import_statement
-  source: (string) @import.source)
-`
-
-	// Query for export statements with source: export ... from 'module'
-	exportQuery := `
-(export_statement
-  source: (string) @export.source)
-`
+	var importQ, exportQ *sitter.Query
+	var lang *sitter.Language
+	if isTSX {
+		importQ = tsImportQueryTSX
+		exportQ = tsExportQueryTSX
+		lang = tsTSXLang
+	} else {
+		importQ = tsImportQueryTS
+		exportQ = tsExportQueryTS
+		lang = tsTypescriptLang
+	}
 
 	// Execute import query
-	importResults, err := executeQuery(rootNode, sourceCode, lang, importQuery)
+	importResults, err := executeQuery(rootNode, sourceCode, lang, importQ)
 	if err == nil {
 		imports = append(imports, importResults...)
 	}
 
 	// Execute export query
-	exportResults, err := executeQuery(rootNode, sourceCode, lang, exportQuery)
+	exportResults, err := executeQuery(rootNode, sourceCode, lang, exportQ)
 	if err == nil {
 		imports = append(imports, exportResults...)
 	}
@@ -256,12 +320,10 @@ func extractImportsFromTree(rootNode *sitter.Node, sourceCode []byte, lang *sitt
 }
 
 // executeQuery runs a tree-sitter query and extracts imports
-func executeQuery(rootNode *sitter.Node, sourceCode []byte, lang *sitter.Language, pattern string) ([]TypeScriptImport, error) {
-	query, err := sitter.NewQuery([]byte(pattern), lang)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create query: %w", err)
+func executeQuery(rootNode *sitter.Node, sourceCode []byte, lang *sitter.Language, query *sitter.Query) ([]TypeScriptImport, error) {
+	if query == nil {
+		return nil, fmt.Errorf("query is nil")
 	}
-	defer query.Close()
 
 	cursor := sitter.NewQueryCursor()
 	defer cursor.Close()
