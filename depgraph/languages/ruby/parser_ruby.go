@@ -167,7 +167,7 @@ var rubyConstantReferencePattern = regexp.MustCompile(`(?:^|[^A-Za-z0-9_:])(::)?
 // ParseRubyConstantReferences extracts qualified constant references from Ruby source.
 // Examples: ActiveSupport::Cache::Coder, ::JSON::ParserError.
 func ParseRubyConstantReferences(sourceCode []byte) []string {
-	matches := rubyConstantReferencePattern.FindAllSubmatch(sourceCode, -1)
+	matches := rubyConstantReferencePattern.FindAllSubmatchIndex(sourceCode, -1)
 	if len(matches) == 0 {
 		return nil
 	}
@@ -175,7 +175,11 @@ func ParseRubyConstantReferences(sourceCode []byte) []string {
 	seen := make(map[string]struct{}, len(matches))
 	refs := make([]string, 0, len(matches))
 	for _, m := range matches {
-		ref := string(m[2])
+		// m[4]:m[5] are the start/end indices of capture group 2
+		if m[4] < 0 {
+			continue
+		}
+		ref := string(sourceCode[m[4]:m[5]])
 		if ref == "" {
 			continue
 		}
@@ -259,6 +263,71 @@ func resolveRubyConstantSegments(segments []string, suppliedFiles map[string]boo
 	}
 
 	return []string{bestPath}
+}
+
+func resolveRubyConstantSegmentsCached(segments []string, pathComponentsCache map[string][]string) []string {
+	bestPath := ""
+	bestGaps := 0
+	bestTrailing := 0
+	bestLeading := 0
+	tie := false
+
+	for filePath, pathParts := range pathComponentsCache {
+		matchIdxs, ok := subsequenceMatch(pathParts, segments)
+		if !ok {
+			continue
+		}
+
+		gaps := 0
+		for i := 1; i < len(matchIdxs); i++ {
+			gaps += matchIdxs[i] - matchIdxs[i-1] - 1
+		}
+		leading := matchIdxs[0]
+		trailing := len(pathParts) - 1 - matchIdxs[len(matchIdxs)-1]
+
+		if bestPath == "" || isBetterConstantPathMatch(gaps, trailing, leading, bestGaps, bestTrailing, bestLeading) {
+			bestPath = filePath
+			bestGaps = gaps
+			bestTrailing = trailing
+			bestLeading = leading
+			tie = false
+			continue
+		}
+
+		if gaps == bestGaps && trailing == bestTrailing && leading == bestLeading {
+			tie = true
+		}
+	}
+
+	if bestPath == "" || tie {
+		return nil
+	}
+
+	return []string{bestPath}
+}
+
+func resolveRubyConstantReferencePathCached(ref string, pathComponentsCache map[string][]string) []string {
+	normalized := strings.TrimPrefix(strings.TrimSpace(ref), "::")
+	if normalized == "" || !strings.Contains(normalized, "::") {
+		return nil
+	}
+
+	segments := strings.Split(normalized, "::")
+	if len(segments) < 2 {
+		return nil
+	}
+
+	for i, segment := range segments {
+		segments[i] = camelToSnake(segment)
+	}
+
+	for end := len(segments); end >= 2; end-- {
+		if resolved := resolveRubyConstantSegmentsCached(segments[:end], pathComponentsCache); len(resolved) == 1 {
+			return resolved
+		}
+	}
+
+	return nil
 }
 
 func camelToSnake(s string) string {
