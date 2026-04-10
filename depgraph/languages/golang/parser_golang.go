@@ -20,7 +20,21 @@ var (
 			return parser
 		},
 	}
+	goImportQuery *sitter.Query
+	goEmbedQuery  *sitter.Query
 )
+
+func init() {
+	var err error
+	goImportQuery, err = sitter.NewQuery([]byte(goImportQueryPattern), goLanguage)
+	if err != nil {
+		panic("failed to compile go import query: " + err.Error())
+	}
+	goEmbedQuery, err = sitter.NewQuery([]byte(`(comment) @comment`), goLanguage)
+	if err != nil {
+		panic("failed to compile go embed query: " + err.Error())
+	}
+}
 
 // GoImport represents an import in a Go file
 type GoImport interface {
@@ -71,16 +85,15 @@ func classifyGoImport(importPath string) GoImport {
 	return InternalImport{path: importPath}
 }
 
+var stdLibPrefixes = []string{
+	"fmt", "os", "io", "net", "time", "sync", "context",
+	"bytes", "strings", "strconv", "errors", "math", "sort",
+	"encoding/", "crypto/", "database/", "net/", "text/",
+	"image/", "runtime", "reflect", "testing", "flag",
+}
+
 // isStandardLibrary checks if an import path is from the Go standard library
 func isStandardLibrary(path string) bool {
-	// Common standard library packages
-	stdLibPrefixes := []string{
-		"fmt", "os", "io", "net", "time", "sync", "context",
-		"bytes", "strings", "strconv", "errors", "math", "sort",
-		"encoding/", "crypto/", "database/", "net/", "text/",
-		"image/", "runtime", "reflect", "testing", "flag",
-	}
-
 	for _, prefix := range stdLibPrefixes {
 		if path == prefix || strings.HasPrefix(path, prefix) {
 			return true
@@ -131,11 +144,15 @@ const goImportQueryPattern = `
 
 // queryGoImports executes a tree-sitter query and extracts import paths
 func queryGoImports(rootNode *sitter.Node, sourceCode []byte, pattern string) ([]GoImport, error) {
-	query, err := sitter.NewQuery([]byte(pattern), goLanguage)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create query: %w", err)
+	query := goImportQuery
+	if query == nil {
+		var err error
+		query, err = sitter.NewQuery([]byte(pattern), goLanguage)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create query: %w", err)
+		}
+		defer query.Close()
 	}
-	defer query.Close()
 
 	cursor := sitter.NewQueryCursor()
 	defer cursor.Close()
@@ -195,12 +212,15 @@ func ParseGoEmbeds(sourceCode []byte) ([]GoEmbed, error) {
 
 // queryGoEmbeds extracts //go:embed directives from comments
 func queryGoEmbeds(rootNode *sitter.Node, sourceCode []byte) ([]GoEmbed, error) {
-	// Query for comment nodes
-	query, err := sitter.NewQuery([]byte(`(comment) @comment`), goLanguage)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create query: %w", err)
+	query := goEmbedQuery
+	if query == nil {
+		var err error
+		query, err = sitter.NewQuery([]byte(`(comment) @comment`), goLanguage)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create query: %w", err)
+		}
+		defer query.Close()
 	}
-	defer query.Close()
 
 	cursor := sitter.NewQueryCursor()
 	defer cursor.Close()

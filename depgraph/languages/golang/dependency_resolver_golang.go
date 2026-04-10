@@ -2,6 +2,7 @@ package golang
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -407,7 +408,7 @@ func getModuleInfo(moduleRoot string, contentReader vcs.ContentReader) (string, 
 	inReplaceBlock := false
 
 	// Parse module name and local replace directives from the content.
-	scanner := bufio.NewScanner(strings.NewReader(string(content)))
+	scanner := bufio.NewScanner(bytes.NewReader(content))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if strings.HasPrefix(line, "module ") {
