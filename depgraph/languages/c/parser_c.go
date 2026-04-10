@@ -49,6 +49,10 @@ func CIncludes(filePath string) ([]Include, error) {
 
 // ParseCIncludes parses C source code and extracts includes.
 func ParseCIncludes(sourceCode []byte) ([]Include, error) {
+	if includes, ok := parseCIncludesFast(sourceCode); ok {
+		return includes, nil
+	}
+
 	parser, _ := cParserPool.Get().(*sitter.Parser)
 	if parser == nil {
 		parser = sitter.NewParser()
@@ -63,6 +67,130 @@ func ParseCIncludes(sourceCode []byte) ([]Include, error) {
 	defer tree.Close()
 
 	return extractIncludes(tree.RootNode(), sourceCode), nil
+}
+
+// parseCIncludesFast extracts #include directives without using tree-sitter.
+// Returns (includes, true) on success, or (nil, false) if parsing is uncertain.
+func parseCIncludesFast(src []byte) ([]Include, bool) {
+	includes := make([]Include, 0, 8)
+	i := 0
+	n := len(src)
+	atLineStart := true
+
+	for i < n {
+		// Block comments /* ... */
+		if i+1 < n && src[i] == '/' && src[i+1] == '*' {
+			i += 2
+			closed := false
+			for i+1 < n {
+				if src[i] == '*' && src[i+1] == '/' {
+					i += 2
+					closed = true
+					break
+				}
+				if src[i] == '\n' {
+					atLineStart = true
+				}
+				i++
+			}
+			if !closed {
+				return nil, false
+			}
+			continue
+		}
+		// Line comments // ...
+		if i+1 < n && src[i] == '/' && src[i+1] == '/' {
+			for i < n && src[i] != '\n' {
+				i++
+			}
+			continue
+		}
+		// String literals
+		if src[i] == '"' {
+			i++
+			for i < n {
+				if src[i] == '\\' {
+					i += 2
+					continue
+				}
+				if src[i] == '"' {
+					i++
+					break
+				}
+				if src[i] == '\n' {
+					atLineStart = true
+				}
+				i++
+			}
+			atLineStart = false
+			continue
+		}
+		// Char literals
+		if src[i] == '\'' {
+			i++
+			for i < n {
+				if src[i] == '\\' {
+					i += 2
+					continue
+				}
+				if src[i] == '\'' {
+					i++
+					break
+				}
+				i++
+			}
+			atLineStart = false
+			continue
+		}
+		if src[i] == '\n' {
+			atLineStart = true
+			i++
+			continue
+		}
+		if atLineStart {
+			// Skip horizontal whitespace
+			for i < n && (src[i] == ' ' || src[i] == '\t') {
+				i++
+			}
+			if i < n && src[i] == '#' {
+				i++
+				for i < n && (src[i] == ' ' || src[i] == '\t') {
+					i++
+				}
+				const directive = "include"
+				if i+len(directive) <= n && string(src[i:i+len(directive)]) == directive {
+					j := i + len(directive)
+					for j < n && (src[j] == ' ' || src[j] == '\t') {
+						j++
+					}
+					if j < n {
+						switch src[j] {
+						case '"':
+							end := j + 1
+							for end < n && src[end] != '"' && src[end] != '\n' {
+								end++
+							}
+							if end < n && src[end] == '"' {
+								includes = append(includes, Include{Path: string(src[j+1 : end]), Kind: IncludeLocal})
+							}
+						case '<':
+							end := j + 1
+							for end < n && src[end] != '>' && src[end] != '\n' {
+								end++
+							}
+							if end < n && src[end] == '>' {
+								includes = append(includes, Include{Path: string(src[j+1 : end]), Kind: IncludeSystem})
+							}
+						}
+					}
+				}
+			}
+			atLineStart = false
+			continue
+		}
+		i++
+	}
+	return includes, true
 }
 
 func extractIncludes(rootNode *sitter.Node, sourceCode []byte) []Include {
