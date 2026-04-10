@@ -5,9 +5,21 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/swift"
+)
+
+var (
+	swiftLanguage   = swift.GetLanguage()
+	swiftParserPool = sync.Pool{
+		New: func() any {
+			parser := sitter.NewParser()
+			parser.SetLanguage(swiftLanguage)
+			return parser
+		},
+	}
 )
 
 // SwiftImport represents an import in a Swift file.
@@ -148,9 +160,14 @@ func ExtractSwiftTypeIdentifiers(sourceCode []byte) []string {
 }
 
 func parseSwift(sourceCode []byte) (*sitter.Tree, error) {
-	parser := sitter.NewParser()
-	parser.SetLanguage(swift.GetLanguage())
-	return parser.ParseCtx(context.Background(), nil, sourceCode)
+	parser, _ := swiftParserPool.Get().(*sitter.Parser)
+	if parser == nil {
+		parser = sitter.NewParser()
+		parser.SetLanguage(swiftLanguage)
+	}
+	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
+	swiftParserPool.Put(parser)
+	return tree, err
 }
 
 func isTopLevelSwiftDeclaration(node *sitter.Node) bool {
