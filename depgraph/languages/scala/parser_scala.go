@@ -3,10 +3,22 @@ package scala
 import (
 	"context"
 	"strings"
+	"sync"
 	"unicode"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	tsscale "github.com/smacker/go-tree-sitter/scala"
+)
+
+var (
+	scalaLanguage   = tsscale.GetLanguage()
+	scalaParserPool = sync.Pool{
+		New: func() any {
+			parser := sitter.NewParser()
+			parser.SetLanguage(scalaLanguage)
+			return parser
+		},
+	}
 )
 
 // ScalaImport represents an import in Scala source code.
@@ -439,9 +451,14 @@ func extractSelectorImports(prefix []string, selectors *sitter.Node, sourceCode 
 }
 
 func parseScala(sourceCode []byte) (*sitter.Tree, error) {
-	parser := sitter.NewParser()
-	parser.SetLanguage(tsscale.GetLanguage())
-	return parser.ParseCtx(context.Background(), nil, sourceCode)
+	parser, _ := scalaParserPool.Get().(*sitter.Parser)
+	if parser == nil {
+		parser = sitter.NewParser()
+		parser.SetLanguage(scalaLanguage)
+	}
+	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
+	scalaParserPool.Put(parser)
+	return tree, err
 }
 
 func findFirstNodeOfType(node *sitter.Node, nodeType string) *sitter.Node {
