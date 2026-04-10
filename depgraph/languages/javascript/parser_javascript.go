@@ -1,10 +1,12 @@
 package javascript
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
@@ -96,6 +98,51 @@ var nodeBuiltins = map[string]bool{
 	"path/win32":     true,
 }
 
+var (
+	jsImportFromRE = regexp.MustCompile(`(?ms)^\s*import\b[\s\S]*?\bfrom\s*['"]([^'"]+)['"]`)
+	jsSideEffectRE = regexp.MustCompile(`(?m)^\s*import\s*['"]([^'"]+)['"]`)
+	jsExportFromRE = regexp.MustCompile(`(?ms)^\s*export\b[\s\S]*?\bfrom\s*['"]([^'"]+)['"]`)
+	jsRequireRE    = regexp.MustCompile(`\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)`)
+)
+
+// extractJSImportsFast extracts JavaScript imports using regex without tree-sitter.
+func extractJSImportsFast(sourceCode []byte) []JavaScriptImport {
+	if !bytes.Contains(sourceCode, []byte("import")) &&
+		!bytes.Contains(sourceCode, []byte("export")) &&
+		!bytes.Contains(sourceCode, []byte("require")) {
+		return []JavaScriptImport{}
+	}
+
+	source := string(sourceCode)
+	imports := make([]JavaScriptImport, 0, 8)
+
+	for _, m := range jsImportFromRE.FindAllStringSubmatch(source, -1) {
+		if len(m) >= 2 && m[1] != "" {
+			imports = append(imports, classifyJavaScriptImport(m[1], false))
+		}
+	}
+
+	for _, m := range jsSideEffectRE.FindAllStringSubmatch(source, -1) {
+		if len(m) >= 2 && m[1] != "" {
+			imports = append(imports, classifyJavaScriptImport(m[1], false))
+		}
+	}
+
+	for _, m := range jsExportFromRE.FindAllStringSubmatch(source, -1) {
+		if len(m) >= 2 && m[1] != "" {
+			imports = append(imports, classifyJavaScriptImport(m[1], false))
+		}
+	}
+
+	for _, m := range jsRequireRE.FindAllStringSubmatch(source, -1) {
+		if len(m) >= 2 && m[1] != "" {
+			imports = append(imports, classifyJavaScriptImport(m[1], false))
+		}
+	}
+
+	return imports
+}
+
 // classifyJavaScriptImport classifies a JavaScript import path
 func classifyJavaScriptImport(importPath string, isTypeOnly bool) JavaScriptImport {
 	// Check for node: prefix (e.g., node:fs)
@@ -130,6 +177,10 @@ func JavaScriptImports(filePath string) ([]JavaScriptImport, error) {
 
 // ParseJavaScriptImports parses JavaScript source code and extracts imports
 func ParseJavaScriptImports(sourceCode []byte, isJSX bool) ([]JavaScriptImport, error) {
+	if fast := extractJSImportsFast(sourceCode); fast != nil {
+		return fast, nil
+	}
+
 	// tree-sitter-javascript supports JSX; keep explicit mode for clarity.
 	var lang *sitter.Language
 	if isJSX {
