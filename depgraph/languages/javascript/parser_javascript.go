@@ -99,13 +99,16 @@ var nodeBuiltins = map[string]bool{
 }
 
 var (
-	jsImportFromRE = regexp.MustCompile(`(?ms)^\s*import\b[\s\S]*?\bfrom\s*['"]([^'"]+)['"]`)
 	jsSideEffectRE = regexp.MustCompile(`(?m)^\s*import\s*['"]([^'"]+)['"]`)
-	jsExportFromRE = regexp.MustCompile(`(?ms)^\s*export\b[\s\S]*?\bfrom\s*['"]([^'"]+)['"]`)
 	jsRequireRE    = regexp.MustCompile(`\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)`)
+	jsFromPathRE   = regexp.MustCompile(`\bfrom\s*['"]([^'"]+)['"]`)
 )
 
-// extractJSImportsFast extracts JavaScript imports using regex without tree-sitter.
+// extractJSImportsFast extracts JavaScript imports using a byte scanner and
+// simple regexes without tree-sitter. The two formerly-expensive multiline
+// patterns (jsImportFromRE / jsExportFromRE with [\s\S]*?) are replaced by a
+// line-oriented scan so the regex engine never has to backtrack across the
+// entire file.
 func extractJSImportsFast(sourceCode []byte) []JavaScriptImport {
 	if !bytes.Contains(sourceCode, []byte("import")) &&
 		!bytes.Contains(sourceCode, []byte("export")) &&
@@ -113,33 +116,73 @@ func extractJSImportsFast(sourceCode []byte) []JavaScriptImport {
 		return []JavaScriptImport{}
 	}
 
-	source := string(sourceCode)
 	imports := make([]JavaScriptImport, 0, 8)
 
-	for _, m := range jsImportFromRE.FindAllStringSubmatch(source, -1) {
-		if len(m) >= 2 && m[1] != "" {
-			imports = append(imports, classifyJavaScriptImport(m[1], false))
+	// import/export … from 'path': scan line-by-line to avoid O(n²) multiline regex.
+	imports = scanImportExportFrom(sourceCode, imports)
+
+	// Side-effect imports: import 'path'
+	for _, m := range jsSideEffectRE.FindAllSubmatch(sourceCode, -1) {
+		if len(m) >= 2 && len(m[1]) > 0 {
+			imports = append(imports, classifyJavaScriptImport(string(m[1]), false))
 		}
 	}
 
-	for _, m := range jsSideEffectRE.FindAllStringSubmatch(source, -1) {
-		if len(m) >= 2 && m[1] != "" {
-			imports = append(imports, classifyJavaScriptImport(m[1], false))
+	// CommonJS require('path')
+	for _, m := range jsRequireRE.FindAllSubmatch(sourceCode, -1) {
+		if len(m) >= 2 && len(m[1]) > 0 {
+			imports = append(imports, classifyJavaScriptImport(string(m[1]), false))
 		}
 	}
 
-	for _, m := range jsExportFromRE.FindAllStringSubmatch(source, -1) {
-		if len(m) >= 2 && m[1] != "" {
-			imports = append(imports, classifyJavaScriptImport(m[1], false))
-		}
-	}
+	return imports
+}
 
-	for _, m := range jsRequireRE.FindAllStringSubmatch(source, -1) {
-		if len(m) >= 2 && m[1] != "" {
-			imports = append(imports, classifyJavaScriptImport(m[1], false))
-		}
-	}
+// scanImportExportFrom walks src line by line. When a line starts with
+// "import" or "export" it accumulates lines until it finds a from 'path'
+// clause (up to maxStmtLines lookahead) and extracts the module path.
+// This replaces the two (?ms)^\s*(import|export)\b[\s\S]*?\bfrom\s*['"]…
+// patterns that caused quadratic backtracking on large files.
+func scanImportExportFrom(src []byte, imports []JavaScriptImport) []JavaScriptImport {
+	const maxStmtLines = 20
 
+	i := 0
+	for i < len(src) {
+		// Find the end of the current line.
+		nl := bytes.IndexByte(src[i:], '\n')
+		var lineEnd int
+		if nl < 0 {
+			lineEnd = len(src)
+		} else {
+			lineEnd = i + nl
+		}
+
+		line := bytes.TrimSpace(src[i:lineEnd])
+
+		startsImport := bytes.HasPrefix(line, []byte("import ")) || bytes.HasPrefix(line, []byte("import{"))
+		startsExport := bytes.HasPrefix(line, []byte("export ")) || bytes.HasPrefix(line, []byte("export{"))
+
+		if startsImport || startsExport {
+			// Grow the statement window until we find 'from "…"' or run out of
+			// lookahead lines.
+			stmtEnd := lineEnd
+			for k := 0; k < maxStmtLines; k++ {
+				segment := src[i:stmtEnd]
+				if m := jsFromPathRE.FindSubmatch(segment); m != nil && len(m[1]) > 0 {
+					imports = append(imports, classifyJavaScriptImport(string(m[1]), false))
+					break
+				}
+				// Advance to next line end.
+				next := bytes.IndexByte(src[stmtEnd:], '\n')
+				if next < 0 {
+					break
+				}
+				stmtEnd += next + 1
+			}
+		}
+
+		i = lineEnd + 1
+	}
 	return imports
 }
 
