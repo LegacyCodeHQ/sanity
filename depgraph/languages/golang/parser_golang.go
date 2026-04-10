@@ -5,9 +5,21 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	tsgolang "github.com/smacker/go-tree-sitter/golang"
+)
+
+var (
+	goLanguage   = tsgolang.GetLanguage()
+	goParserPool = sync.Pool{
+		New: func() any {
+			parser := sitter.NewParser()
+			parser.SetLanguage(goLanguage)
+			return parser
+		},
+	}
 )
 
 // GoImport represents an import in a Go file
@@ -90,10 +102,12 @@ func GoImports(filePath string) ([]GoImport, error) {
 
 // ParseGoImports parses Go source code and extracts imports
 func ParseGoImports(sourceCode []byte) ([]GoImport, error) {
-	lang := tsgolang.GetLanguage()
-
-	parser := sitter.NewParser()
-	parser.SetLanguage(lang)
+	parser, _ := goParserPool.Get().(*sitter.Parser)
+	if parser == nil {
+		parser = sitter.NewParser()
+		parser.SetLanguage(goLanguage)
+	}
+	defer goParserPool.Put(parser)
 
 	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
 	if err != nil {
@@ -117,9 +131,7 @@ const goImportQueryPattern = `
 
 // queryGoImports executes a tree-sitter query and extracts import paths
 func queryGoImports(rootNode *sitter.Node, sourceCode []byte, pattern string) ([]GoImport, error) {
-	lang := tsgolang.GetLanguage()
-
-	query, err := sitter.NewQuery([]byte(pattern), lang)
+	query, err := sitter.NewQuery([]byte(pattern), goLanguage)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create query: %w", err)
 	}
@@ -165,10 +177,12 @@ type GoEmbed struct {
 
 // ParseGoEmbeds parses Go source code and extracts //go:embed directives
 func ParseGoEmbeds(sourceCode []byte) ([]GoEmbed, error) {
-	lang := tsgolang.GetLanguage()
-
-	parser := sitter.NewParser()
-	parser.SetLanguage(lang)
+	parser, _ := goParserPool.Get().(*sitter.Parser)
+	if parser == nil {
+		parser = sitter.NewParser()
+		parser.SetLanguage(goLanguage)
+	}
+	defer goParserPool.Put(parser)
 
 	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
 	if err != nil {
@@ -181,10 +195,8 @@ func ParseGoEmbeds(sourceCode []byte) ([]GoEmbed, error) {
 
 // queryGoEmbeds extracts //go:embed directives from comments
 func queryGoEmbeds(rootNode *sitter.Node, sourceCode []byte) ([]GoEmbed, error) {
-	lang := tsgolang.GetLanguage()
-
 	// Query for comment nodes
-	query, err := sitter.NewQuery([]byte(`(comment) @comment`), lang)
+	query, err := sitter.NewQuery([]byte(`(comment) @comment`), goLanguage)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create query: %w", err)
 	}
