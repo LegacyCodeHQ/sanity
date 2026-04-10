@@ -1,6 +1,7 @@
 package python
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -67,6 +68,74 @@ func classifyPythonImport(importPath string, isTypeOnly bool) PythonImport {
 	return ExternalImport{path: importPath, isTypeOnly: isTypeOnly}
 }
 
+// parsePythonImportsFast extracts Python imports with a simple byte scanner, avoiding tree-sitter.
+// Returns (imports, true) on success, (nil, false) when the file requires tree-sitter fallback.
+func parsePythonImportsFast(src []byte) ([]PythonImport, bool) {
+	// Triple-quoted strings can contain import-like text; bail to tree-sitter.
+	if bytes.Contains(src, []byte(`"""`)) || bytes.Contains(src, []byte("'''")) {
+		return nil, false
+	}
+
+	var imports []PythonImport
+	remaining := src
+
+	for len(remaining) > 0 {
+		nl := bytes.IndexByte(remaining, '\n')
+		var line []byte
+		if nl < 0 {
+			line = remaining
+			remaining = nil
+		} else {
+			line = remaining[:nl]
+			remaining = remaining[nl+1:]
+		}
+
+		trimmed := bytes.TrimSpace(line)
+		if len(trimmed) == 0 || trimmed[0] == '#' {
+			continue
+		}
+
+		// Backslash continuation — bail to tree-sitter.
+		if trimmed[len(trimmed)-1] == '\\' {
+			return nil, false
+		}
+
+		if bytes.HasPrefix(trimmed, []byte("import ")) {
+			mods := trimmed[7:]
+			for _, part := range bytes.Split(mods, []byte(",")) {
+				mod := bytes.TrimSpace(part)
+				if idx := bytes.Index(mod, []byte(" as ")); idx >= 0 {
+					mod = bytes.TrimSpace(mod[:idx])
+				} else if idx := bytes.IndexByte(mod, ' '); idx >= 0 {
+					mod = mod[:idx]
+				}
+				if len(mod) > 0 {
+					imports = append(imports, classifyPythonImport(string(mod), false))
+				}
+			}
+			continue
+		}
+
+		if bytes.HasPrefix(trimmed, []byte("from ")) {
+			fromRest := trimmed[5:]
+			importIdx := bytes.Index(fromRest, []byte(" import "))
+			if importIdx < 0 {
+				// from X import ( — multiline form, bail.
+				if bytes.IndexByte(fromRest, '(') >= 0 {
+					return nil, false
+				}
+				continue
+			}
+			modulePath := string(bytes.TrimSpace(fromRest[:importIdx]))
+			if modulePath != "" {
+				imports = append(imports, classifyPythonImport(modulePath, false))
+			}
+		}
+	}
+
+	return imports, true
+}
+
 // PythonImports parses a Python file and returns its imports.
 func PythonImports(filePath string) ([]PythonImport, error) {
 	sourceCode, err := os.ReadFile(filePath)
@@ -79,6 +148,10 @@ func PythonImports(filePath string) ([]PythonImport, error) {
 
 // ParsePythonImports parses Python source code and extracts imports.
 func ParsePythonImports(sourceCode []byte) ([]PythonImport, error) {
+	if imports, ok := parsePythonImportsFast(sourceCode); ok {
+		return imports, nil
+	}
+
 	parser, _ := pythonParserPool.Get().(*sitter.Parser)
 	if parser == nil {
 		parser = sitter.NewParser()
