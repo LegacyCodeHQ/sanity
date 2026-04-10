@@ -6,6 +6,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 
@@ -165,10 +166,10 @@ func KotlinImports(filePath string) ([]KotlinImport, error) {
 
 // ParseKotlinImports parses Kotlin source code and extracts imports
 func ParseKotlinImports(sourceCode []byte) ([]KotlinImport, error) {
-	lang := kotlin.GetLanguage()
+	ensureKotlinQueries()
 
-	parser := sitter.NewParser()
-	parser.SetLanguage(lang)
+	parser := kotlinParserPool.Get().(*sitter.Parser)
+	defer kotlinParserPool.Put(parser)
 
 	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
 	if err != nil {
@@ -177,14 +178,14 @@ func ParseKotlinImports(sourceCode []byte) ([]KotlinImport, error) {
 	defer tree.Close()
 
 	// Try primary query pattern
-	imports, err := queryKotlinImports(tree.RootNode(), sourceCode, kotlinImportQueryPattern)
+	imports, err := runQueryKotlinImports(tree.RootNode(), sourceCode, kotlinCompiledImportQuery, kotlinImportQueryPattern)
 	if err == nil {
 		return imports, nil
 	}
 
 	// If primary pattern fails, try fallback patterns
-	for _, pattern := range kotlinFallbackQueryPatterns {
-		imports, err = queryKotlinImports(tree.RootNode(), sourceCode, pattern)
+	for i, q := range kotlinCompiledFallbackQueries {
+		imports, err = runQueryKotlinImports(tree.RootNode(), sourceCode, q, kotlinFallbackQueryPatterns[i])
 		if err == nil {
 			return imports, nil
 		}
@@ -204,6 +205,121 @@ const kotlinImportQueryPattern = `
 var kotlinFallbackQueryPatterns = []string{
 	`(import_list (import_header (identifier) @import.path))`,
 	`(import_header) @import.full`,
+}
+
+var kotlinParserPool = sync.Pool{
+	New: func() interface{} {
+		lang := kotlin.GetLanguage()
+		p := sitter.NewParser()
+		p.SetLanguage(lang)
+		return p
+	},
+}
+
+var (
+	kotlinQueryOnce              sync.Once
+	kotlinCompiledImportQuery    *sitter.Query
+	kotlinCompiledFallbackQueries []*sitter.Query
+	kotlinCompiledPackageQuery   *sitter.Query
+	kotlinCompiledTypeIdQuery    *sitter.Query
+	kotlinCompiledConstructorQuery *sitter.Query
+	kotlinCompiledSymbolQuery    *sitter.Query
+)
+
+func ensureKotlinQueries() {
+	kotlinQueryOnce.Do(func() {
+		lang := kotlin.GetLanguage()
+		var err error
+
+		kotlinCompiledImportQuery, err = sitter.NewQuery([]byte(kotlinImportQueryPattern), lang)
+		if err != nil {
+			panic(fmt.Sprintf("failed to compile kotlin import query: %v", err))
+		}
+
+		kotlinCompiledFallbackQueries = make([]*sitter.Query, 0, len(kotlinFallbackQueryPatterns))
+		for _, pattern := range kotlinFallbackQueryPatterns {
+			q, err := sitter.NewQuery([]byte(pattern), lang)
+			if err != nil {
+				panic(fmt.Sprintf("failed to compile kotlin fallback query: %v", err))
+			}
+			kotlinCompiledFallbackQueries = append(kotlinCompiledFallbackQueries, q)
+		}
+
+		kotlinCompiledPackageQuery, err = sitter.NewQuery([]byte(kotlinPackageQueryPattern), lang)
+		if err != nil {
+			panic(fmt.Sprintf("failed to compile kotlin package query: %v", err))
+		}
+
+		kotlinCompiledTypeIdQuery, err = sitter.NewQuery([]byte("(type_identifier) @type.name"), lang)
+		if err != nil {
+			panic(fmt.Sprintf("failed to compile kotlin type_identifier query: %v", err))
+		}
+
+		kotlinCompiledConstructorQuery, err = sitter.NewQuery([]byte("(call_expression (simple_identifier) @constructor.name)"), lang)
+		if err != nil {
+			panic(fmt.Sprintf("failed to compile kotlin constructor query: %v", err))
+		}
+
+		kotlinCompiledSymbolQuery, err = sitter.NewQuery([]byte("(navigation_expression (simple_identifier) @symbol.name)"), lang)
+		if err != nil {
+			panic(fmt.Sprintf("failed to compile kotlin symbol query: %v", err))
+		}
+	})
+}
+
+// runQueryKotlinImports executes a pre-compiled tree-sitter query and extracts import paths
+func runQueryKotlinImports(rootNode *sitter.Node, sourceCode []byte, query *sitter.Query, pattern string) ([]KotlinImport, error) {
+	cursor := sitter.NewQueryCursor()
+	defer cursor.Close()
+
+	cursor.Exec(query, rootNode)
+
+	imports := []KotlinImport{}
+	projectPackages := make(map[string]bool) // Will be populated later during graph building
+
+	for {
+		match, ok := cursor.NextMatch()
+		if !ok {
+			break
+		}
+
+		match = cursor.FilterPredicates(match, sourceCode)
+
+		for _, capture := range match.Captures {
+			content := capture.Node.Content(sourceCode)
+			importPath := content
+
+			// If this is a full import capture, extract the import path manually
+			if strings.Contains(pattern, "@import.full") {
+				importPath = extractImportFromFullText(content)
+			}
+
+			// Check if this is a wildcard import by looking at the parent import_header node
+			isWildcard := false
+			parent := capture.Node.Parent()
+			if parent != nil && parent.Type() == "import_header" {
+				// Check if any child is a wildcard_import node
+				for i := 0; i < int(parent.ChildCount()); i++ {
+					child := parent.Child(i)
+					if child.Type() == "wildcard_import" {
+						isWildcard = true
+						break
+					}
+				}
+			}
+
+			// Clean the import path (remove "import" keyword if present)
+			importPath = strings.TrimPrefix(importPath, "import")
+			importPath = strings.TrimSpace(importPath)
+
+			if importPath != "" {
+				// For now, classify with empty project packages (will be reclassified during graph building)
+				imports = append(imports, classifyKotlinImport(importPath, isWildcard, projectPackages))
+			}
+		}
+	}
+
+	return imports, nil
 }
 
 // queryKotlinImports executes a tree-sitter query and extracts import paths
@@ -282,10 +398,10 @@ func extractImportFromFullText(text string) string {
 
 // ExtractPackageDeclaration extracts the package declaration from Kotlin source code
 func ExtractPackageDeclaration(sourceCode []byte) string {
-	lang := kotlin.GetLanguage()
+	ensureKotlinQueries()
 
-	parser := sitter.NewParser()
-	parser.SetLanguage(lang)
+	parser := kotlinParserPool.Get().(*sitter.Parser)
+	defer kotlinParserPool.Put(parser)
 
 	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
 	if err != nil {
@@ -295,7 +411,7 @@ func ExtractPackageDeclaration(sourceCode []byte) string {
 	defer tree.Close()
 
 	// Try tree-sitter query for package header
-	pkg, err := queryPackageName(tree.RootNode(), sourceCode)
+	pkg, err := runQueryPackageName(tree.RootNode(), sourceCode)
 	if err == nil && pkg != "" {
 		return pkg
 	}
@@ -309,6 +425,28 @@ const kotlinPackageQueryPattern = `
 (package_header
   (identifier) @package.name)
 `
+
+// runQueryPackageName executes a pre-compiled tree-sitter query to extract package name
+func runQueryPackageName(rootNode *sitter.Node, sourceCode []byte) (string, error) {
+	cursor := sitter.NewQueryCursor()
+	defer cursor.Close()
+
+	cursor.Exec(kotlinCompiledPackageQuery, rootNode)
+
+	match, ok := cursor.NextMatch()
+	if !ok {
+		return "", fmt.Errorf("no package declaration found")
+	}
+
+	match = cursor.FilterPredicates(match, sourceCode)
+
+	if len(match.Captures) > 0 {
+		pkg := match.Captures[0].Node.Content(sourceCode)
+		return strings.TrimSpace(pkg), nil
+	}
+
+	return "", fmt.Errorf("no package name captured")
+}
 
 // queryPackageName executes a tree-sitter query to extract package name
 func queryPackageName(rootNode *sitter.Node, sourceCode []byte) (string, error) {
@@ -367,9 +505,10 @@ func ClassifyWithProjectPackages(imports []KotlinImport, projectPackages map[str
 
 // ExtractTopLevelTypeNames returns the class/object/interface/typealias names declared at the top level of the file
 func ExtractTopLevelTypeNames(sourceCode []byte) []string {
-	lang := kotlin.GetLanguage()
-	parser := sitter.NewParser()
-	parser.SetLanguage(lang)
+	ensureKotlinQueries()
+
+	parser := kotlinParserPool.Get().(*sitter.Parser)
+	defer kotlinParserPool.Put(parser)
 
 	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
 	if err != nil {
@@ -404,9 +543,10 @@ func ExtractTopLevelTypeNames(sourceCode []byte) []string {
 
 // ExtractTypeIdentifiers returns all type identifiers referenced within the file
 func ExtractTypeIdentifiers(sourceCode []byte) []string {
-	lang := kotlin.GetLanguage()
-	parser := sitter.NewParser()
-	parser.SetLanguage(lang)
+	ensureKotlinQueries()
+
+	parser := kotlinParserPool.Get().(*sitter.Parser)
+	defer kotlinParserPool.Put(parser)
 
 	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
 	if err != nil {
@@ -414,15 +554,9 @@ func ExtractTypeIdentifiers(sourceCode []byte) []string {
 	}
 	defer tree.Close()
 
-	query, err := sitter.NewQuery([]byte("(type_identifier) @type.name"), lang)
-	if err != nil {
-		return nil
-	}
-	defer query.Close()
-
 	cursor := sitter.NewQueryCursor()
 	defer cursor.Close()
-	cursor.Exec(query, tree.RootNode())
+	cursor.Exec(kotlinCompiledTypeIdQuery, tree.RootNode())
 
 	seen := make(map[string]bool)
 	var identifiers []string
@@ -440,17 +574,9 @@ func ExtractTypeIdentifiers(sourceCode []byte) []string {
 		}
 	}
 
-	// Kotlin constructor-style calls like `Foo(...)` are represented as
-	// call_expression(simple_identifier), not type_identifier.
-	constructorQuery, err := sitter.NewQuery([]byte("(call_expression (simple_identifier) @constructor.name)"), lang)
-	if err != nil {
-		return identifiers
-	}
-	defer constructorQuery.Close()
-
 	constructorCursor := sitter.NewQueryCursor()
 	defer constructorCursor.Close()
-	constructorCursor.Exec(constructorQuery, tree.RootNode())
+	constructorCursor.Exec(kotlinCompiledConstructorQuery, tree.RootNode())
 
 	for {
 		match, ok := constructorCursor.NextMatch()
@@ -466,15 +592,9 @@ func ExtractTypeIdentifiers(sourceCode []byte) []string {
 		}
 	}
 
-	symbolQuery, err := sitter.NewQuery([]byte("(navigation_expression (simple_identifier) @symbol.name)"), lang)
-	if err != nil {
-		return identifiers
-	}
-	defer symbolQuery.Close()
-
 	symbolCursor := sitter.NewQueryCursor()
 	defer symbolCursor.Close()
-	symbolCursor.Exec(symbolQuery, tree.RootNode())
+	symbolCursor.Exec(kotlinCompiledSymbolQuery, tree.RootNode())
 
 	for {
 		match, ok := symbolCursor.NextMatch()
