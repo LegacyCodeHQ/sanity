@@ -3,10 +3,34 @@ package java
 import (
 	"context"
 	"strings"
+	"sync"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	tsjava "github.com/smacker/go-tree-sitter/java"
 )
+
+var (
+	javaLanguage   = tsjava.GetLanguage()
+	javaParserPool = sync.Pool{
+		New: func() any {
+			parser := sitter.NewParser()
+			parser.SetLanguage(javaLanguage)
+			return parser
+		},
+	}
+	javaTypeIdentifierQueryOnce     sync.Once
+	javaCompiledTypeIdentifierQuery *sitter.Query
+)
+
+func ensureJavaQueries() {
+	javaTypeIdentifierQueryOnce.Do(func() {
+		var err error
+		javaCompiledTypeIdentifierQuery, err = sitter.NewQuery([]byte(javaTypeIdentifierQuery), javaLanguage)
+		if err != nil {
+			panic("failed to compile java type identifier query: " + err.Error())
+		}
+	})
+}
 
 // JavaImport represents a Java import in source code.
 type JavaImport interface {
@@ -253,10 +277,10 @@ func ExtractTypeIdentifiers(sourceCode []byte) []string {
 	seen := make(map[string]bool)
 	result := []string{}
 
-	query, err := sitter.NewQuery([]byte(javaTypeIdentifierQuery), tsjava.GetLanguage())
-	if err == nil {
+	ensureJavaQueries()
+	if javaCompiledTypeIdentifierQuery != nil {
 		cursor := sitter.NewQueryCursor()
-		cursor.Exec(query, tree.RootNode())
+		cursor.Exec(javaCompiledTypeIdentifierQuery, tree.RootNode())
 
 		for {
 			match, ok := cursor.NextMatch()
@@ -277,7 +301,6 @@ func ExtractTypeIdentifiers(sourceCode []byte) []string {
 		}
 
 		cursor.Close()
-		query.Close()
 	}
 
 	for _, name := range ParseTopLevelTypeNames(sourceCode) {
@@ -296,9 +319,14 @@ const javaTypeIdentifierQuery = `
 `
 
 func parseJava(sourceCode []byte) (*sitter.Tree, error) {
-	parser := sitter.NewParser()
-	parser.SetLanguage(tsjava.GetLanguage())
-	return parser.ParseCtx(context.Background(), nil, sourceCode)
+	parser, _ := javaParserPool.Get().(*sitter.Parser)
+	if parser == nil {
+		parser = sitter.NewParser()
+		parser.SetLanguage(javaLanguage)
+	}
+	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
+	javaParserPool.Put(parser)
+	return tree, err
 }
 
 func isTopLevelDeclaration(node *sitter.Node) bool {
