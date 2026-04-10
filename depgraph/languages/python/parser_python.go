@@ -7,9 +7,21 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/python"
+)
+
+var (
+	pythonLanguage   = python.GetLanguage()
+	pythonParserPool = sync.Pool{
+		New: func() any {
+			parser := sitter.NewParser()
+			parser.SetLanguage(pythonLanguage)
+			return parser
+		},
+	}
 )
 
 // PythonImport represents an import in a Python file.
@@ -67,10 +79,12 @@ func PythonImports(filePath string) ([]PythonImport, error) {
 
 // ParsePythonImports parses Python source code and extracts imports.
 func ParsePythonImports(sourceCode []byte) ([]PythonImport, error) {
-	lang := python.GetLanguage()
-
-	parser := sitter.NewParser()
-	parser.SetLanguage(lang)
+	parser, _ := pythonParserPool.Get().(*sitter.Parser)
+	if parser == nil {
+		parser = sitter.NewParser()
+		parser.SetLanguage(pythonLanguage)
+	}
+	defer pythonParserPool.Put(parser)
 
 	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
 	if err != nil {
