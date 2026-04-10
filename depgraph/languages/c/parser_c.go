@@ -6,9 +6,21 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/c"
+)
+
+var (
+	cLanguage   = c.GetLanguage()
+	cParserPool = sync.Pool{
+		New: func() any {
+			parser := sitter.NewParser()
+			parser.SetLanguage(cLanguage)
+			return parser
+		},
+	}
 )
 
 // IncludeKind distinguishes between system and local includes.
@@ -37,10 +49,12 @@ func CIncludes(filePath string) ([]Include, error) {
 
 // ParseCIncludes parses C source code and extracts includes.
 func ParseCIncludes(sourceCode []byte) ([]Include, error) {
-	lang := c.GetLanguage()
-
-	parser := sitter.NewParser()
-	parser.SetLanguage(lang)
+	parser, _ := cParserPool.Get().(*sitter.Parser)
+	if parser == nil {
+		parser = sitter.NewParser()
+		parser.SetLanguage(cLanguage)
+	}
+	defer cParserPool.Put(parser)
 
 	tree, err := parser.ParseCtx(context.Background(), nil, sourceCode)
 	if err != nil {
