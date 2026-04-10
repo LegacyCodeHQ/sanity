@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"unicode"
 )
 
 // RubyImport represents a require/require_relative in a Ruby file.
@@ -232,17 +231,10 @@ func resolveRubyConstantSegments(segments []string, suppliedFiles map[string]boo
 		}
 
 		pathParts := rubyPathComponents(filePath)
-		matchIdxs, ok := subsequenceMatch(pathParts, segments)
+		gaps, leading, trailing, ok := subsequenceMatch(pathParts, segments)
 		if !ok {
 			continue
 		}
-
-		gaps := 0
-		for i := 1; i < len(matchIdxs); i++ {
-			gaps += matchIdxs[i] - matchIdxs[i-1] - 1
-		}
-		leading := matchIdxs[0]
-		trailing := len(pathParts) - 1 - matchIdxs[len(matchIdxs)-1]
 
 		if bestPath == "" || isBetterConstantPathMatch(gaps, trailing, leading, bestGaps, bestTrailing, bestLeading) {
 			bestPath = filePath
@@ -273,17 +265,10 @@ func resolveRubyConstantSegmentsCached(segments []string, pathComponentsCache ma
 	tie := false
 
 	for filePath, pathParts := range pathComponentsCache {
-		matchIdxs, ok := subsequenceMatch(pathParts, segments)
+		gaps, leading, trailing, ok := subsequenceMatch(pathParts, segments)
 		if !ok {
 			continue
 		}
-
-		gaps := 0
-		for i := 1; i < len(matchIdxs); i++ {
-			gaps += matchIdxs[i] - matchIdxs[i-1] - 1
-		}
-		leading := matchIdxs[0]
-		trailing := len(pathParts) - 1 - matchIdxs[len(matchIdxs)-1]
 
 		if bestPath == "" || isBetterConstantPathMatch(gaps, trailing, leading, bestGaps, bestTrailing, bestLeading) {
 			bestPath = filePath
@@ -334,16 +319,20 @@ func camelToSnake(s string) string {
 	var b strings.Builder
 	b.Grow(len(s) + 4)
 
-	runes := []rune(s)
-	for i, r := range runes {
-		if i > 0 && unicode.IsUpper(r) {
-			prev := runes[i-1]
-			nextLower := i+1 < len(runes) && unicode.IsLower(runes[i+1])
-			if unicode.IsLower(prev) || unicode.IsDigit(prev) || (unicode.IsUpper(prev) && nextLower) {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if i > 0 && c >= 'A' && c <= 'Z' {
+			prev := s[i-1]
+			nextLower := i+1 < len(s) && s[i+1] >= 'a' && s[i+1] <= 'z'
+			if (prev >= 'a' && prev <= 'z') || (prev >= '0' && prev <= '9') || ((prev >= 'A' && prev <= 'Z') && nextLower) {
 				b.WriteByte('_')
 			}
 		}
-		b.WriteRune(unicode.ToLower(r))
+		if c >= 'A' && c <= 'Z' {
+			b.WriteByte(c + 32)
+		} else {
+			b.WriteByte(c)
+		}
 	}
 
 	return b.String()
@@ -362,13 +351,15 @@ func rubyPathComponents(filePath string) []string {
 	return out
 }
 
-func subsequenceMatch(pathParts, targetParts []string) ([]int, bool) {
+func subsequenceMatch(pathParts, targetParts []string) (gaps, leading, trailing int, ok bool) {
 	if len(targetParts) == 0 {
-		return nil, false
+		return 0, 0, 0, false
 	}
 
-	indices := make([]int, 0, len(targetParts))
 	next := 0
+	firstIdx := -1
+	prevIdx := -1
+
 	for i, part := range pathParts {
 		if next >= len(targetParts) {
 			break
@@ -376,11 +367,22 @@ func subsequenceMatch(pathParts, targetParts []string) ([]int, bool) {
 		if part != targetParts[next] {
 			continue
 		}
-		indices = append(indices, i)
+		if firstIdx == -1 {
+			firstIdx = i
+		} else {
+			gaps += i - prevIdx - 1
+		}
+		prevIdx = i
 		next++
 	}
 
-	return indices, next == len(targetParts)
+	if next != len(targetParts) {
+		return 0, 0, 0, false
+	}
+
+	leading = firstIdx
+	trailing = len(pathParts) - 1 - prevIdx
+	return gaps, leading, trailing, true
 }
 
 func isBetterConstantPathMatch(gaps, trailing, leading, bestGaps, bestTrailing, bestLeading int) bool {
