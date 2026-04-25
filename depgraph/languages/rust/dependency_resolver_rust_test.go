@@ -258,6 +258,40 @@ version = "0.1.0"
 	assert.Contains(t, imports, crateBFoo)
 }
 
+// In Rust 2018+, a parent-module file like `src/app.rs` can declare submodules
+// via `mod child;` and re-export their items via `pub use child::item;`. The
+// path `child::item` is interpreted relative to the current module, resolving
+// to `src/app/child.rs`. The resolver must follow this — both for `pub use`
+// and plain `use`.
+func TestResolveRustProjectImports_UseSiblingSubmoduleFromNonModFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	crateRoot := filepath.Join(tmpDir, "mycrate")
+	srcDir := filepath.Join(crateRoot, "src")
+	appDir := filepath.Join(srcDir, "app")
+	require.NoError(t, os.MkdirAll(appDir, 0755))
+
+	cargoToml := filepath.Join(crateRoot, "Cargo.toml")
+	mainFile := filepath.Join(srcDir, "main.rs")
+	appFile := filepath.Join(srcDir, "app.rs")
+	childFile := filepath.Join(appDir, "clarity_desktop.rs")
+
+	require.NoError(t, os.WriteFile(cargoToml, []byte("[package]\nname = \"mycrate\"\n"), 0644))
+	require.NoError(t, os.WriteFile(mainFile, []byte("mod app;\nfn main() { app::run_app(); }\n"), 0644))
+	require.NoError(t, os.WriteFile(appFile, []byte("mod clarity_desktop;\n\npub use clarity_desktop::run_app;\n"), 0644))
+	require.NoError(t, os.WriteFile(childFile, []byte("pub fn run_app() {}\n"), 0644))
+
+	supplied := map[string]bool{
+		cargoToml: true,
+		mainFile:  true,
+		appFile:   true,
+		childFile: true,
+	}
+
+	imports, err := ResolveRustProjectImports(appFile, appFile, supplied, os.ReadFile)
+	require.NoError(t, err)
+	assert.Contains(t, imports, childFile, "pub use clarity_desktop::run_app from app.rs should resolve to app/clarity_desktop.rs")
+}
+
 func TestResolveRustProjectImports_UseSuperFromNonModFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	crateRoot := filepath.Join(tmpDir, "mycrate")

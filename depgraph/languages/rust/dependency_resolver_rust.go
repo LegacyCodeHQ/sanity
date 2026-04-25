@@ -124,6 +124,16 @@ func (r *ProjectImportResolver) resolveRustUsePath(sourceFile, importPath string
 			}
 		}
 	default:
+		// In Rust 2018+, a file like `src/app.rs` that declares `mod foo;`
+		// brings `foo` into its own module namespace. A `use foo::bar;` from
+		// app.rs is resolved relative to app.rs's own module — i.e., it
+		// looks up `src/app/foo.rs`. Try that before falling through to
+		// crate-root / external-crate resolution; sibling submodules shadow
+		// external crates of the same name.
+		if siblings := r.resolveRustSiblingSubmoduleCandidates(sourceFile, path); len(siblings) > 0 {
+			candidates := r.expandRustModRsCandidates(siblings)
+			return deduplicateSuppliedFiles(candidates, r.suppliedFiles)
+		}
 		root, ok := r.findRustCrateRoot(sourceFile)
 		if !ok {
 			return nil
@@ -169,6 +179,31 @@ func resolveRustCrateRootCandidates(crateRoot string, suppliedFiles map[string]b
 		return nil
 	}
 	return filterSuppliedFiles([]string{filepath.Join(crateRoot, "src", "lib.rs")}, suppliedFiles)
+}
+
+// resolveRustSiblingSubmoduleCandidates handles use paths whose first segment
+// names a sibling submodule of the source file. For a non-mod-rs leaf file
+// like `src/app.rs`, `mod foo;` resolves to `src/app/foo.rs`, and
+// `use foo::Bar;` from app.rs targets that file.
+func (r *ProjectImportResolver) resolveRustSiblingSubmoduleCandidates(sourceFile, path string) []string {
+	if isRustDirectoryModuleFile(sourceFile) {
+		return nil
+	}
+	parts := strings.Split(path, "::")
+	if len(parts) == 0 || parts[0] == "" {
+		return nil
+	}
+	base := filepath.Base(sourceFile)
+	stem := strings.TrimSuffix(base, ".rs")
+	if stem == "" || stem == base {
+		return nil
+	}
+	siblingDir := filepath.Join(filepath.Dir(sourceFile), stem)
+	candidates := resolveRustModuleCandidates(siblingDir, parts, r.suppliedFiles)
+	if len(parts) > 1 && len(candidates) == 0 {
+		candidates = append(candidates, resolveRustModuleCandidates(siblingDir, parts[:len(parts)-1], r.suppliedFiles)...)
+	}
+	return deduplicateSuppliedFiles(candidates, r.suppliedFiles)
 }
 
 func resolveRustModuleCandidates(baseDir string, parts []string, suppliedFiles map[string]bool) []string {
