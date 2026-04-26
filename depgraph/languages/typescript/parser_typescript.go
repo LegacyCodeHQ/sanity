@@ -74,13 +74,13 @@ const tsExportQueryPattern = `
 `
 
 var (
-	tsTypescriptLang  = typescript.GetLanguage()
-	tsTSXLang         = tsx.GetLanguage()
-	tsImportQueryTS   *sitter.Query
-	tsExportQueryTS   *sitter.Query
-	tsImportQueryTSX  *sitter.Query
-	tsExportQueryTSX  *sitter.Query
-	tsParserPoolTS    = sync.Pool{
+	tsTypescriptLang = typescript.GetLanguage()
+	tsTSXLang        = tsx.GetLanguage()
+	tsImportQueryTS  *sitter.Query
+	tsExportQueryTS  *sitter.Query
+	tsImportQueryTSX *sitter.Query
+	tsExportQueryTSX *sitter.Query
+	tsParserPoolTS   = sync.Pool{
 		New: func() any {
 			p := sitter.NewParser()
 			p.SetLanguage(tsTypescriptLang)

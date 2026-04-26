@@ -266,7 +266,6 @@ func handleIndex(pageTitle string) http.HandlerFunc {
 	}
 }
 
-
 func handleSSE(b *broker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		flusher, ok := w.(http.Flusher)

@@ -21,8 +21,8 @@ func (Module) Maturity() moduleapi.MaturityLevel {
 
 func (Module) NewResolver(ctx *moduleapi.Context, contentReader vcs.ContentReader) moduleapi.Resolver {
 	return resolver{
-		ctx:            ctx,
-		contentReader:  contentReader,
+		ctx:             ctx,
+		contentReader:   contentReader,
 		projectResolver: NewProjectImportResolver(ctx.SuppliedFiles, contentReader),
 	}
 }

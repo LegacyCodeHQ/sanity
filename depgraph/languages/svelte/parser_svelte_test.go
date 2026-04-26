@@ -84,8 +84,8 @@ func TestParseSvelteImports_ImportClassification(t *testing.T) {
 
 func TestResolveSvelteImportPath(t *testing.T) {
 	suppliedFiles := map[string]bool{
-		"/project/src/stores.js":              true,
-		"/project/src/Button.svelte":          true,
+		"/project/src/stores.js":               true,
+		"/project/src/Button.svelte":           true,
 		"/project/src/components/index.svelte": true,
 	}
 

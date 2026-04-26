@@ -24,7 +24,7 @@ type ProjectImportResolver struct {
 }
 
 type goModuleInfo struct {
-	moduleName  string
+	moduleName   string
 	replacePaths map[string]string
 }
 
@@ -260,7 +260,7 @@ func (r *ProjectImportResolver) getModuleInfoCached(moduleRoot string) goModuleI
 
 	moduleName, replacePaths := getModuleInfo(moduleRoot, r.contentReader)
 	info := goModuleInfo{
-		moduleName:  moduleName,
+		moduleName:   moduleName,
 		replacePaths: replacePaths,
 	}
 	r.moduleInfoCache.Store(moduleRoot, info)

@@ -8,8 +8,8 @@ import (
 
 type stubDependencyResolver struct {
 	supportedByExt map[string]bool
-	mu            sync.Mutex
-	resolvedFiles []string
+	mu             sync.Mutex
+	resolvedFiles  []string
 }
 
 func (s *stubDependencyResolver) SupportsFileExtension(ext string) bool {

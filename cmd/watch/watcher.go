@@ -104,7 +104,7 @@ func watchAndRebuild(ctx context.Context, repoPath string, opts *watchOptions, b
 			if headChanged {
 				b.archiveWorkingSet()
 			}
-				publishCurrentGraph(repoPath, opts, b, formatter)
+			publishCurrentGraph(repoPath, opts, b, formatter)
 
 		case <-debounceC:
 			publishCurrentGraph(repoPath, opts, b, formatter)

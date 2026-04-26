@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	csharpLanguage = tscsharp.GetLanguage()
+	csharpLanguage   = tscsharp.GetLanguage()
 	csharpParserPool = sync.Pool{
 		New: func() any {
 			parser := sitter.NewParser()

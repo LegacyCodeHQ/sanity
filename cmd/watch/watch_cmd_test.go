@@ -104,7 +104,6 @@ func TestBuildWatchPageTitle(t *testing.T) {
 	assert.Equal(t, "clarity watch", buildWatchPageTitle(""))
 }
 
-
 func TestHandleSSE_StreamsGraphEvent(t *testing.T) {
 	b := newBroker()
 
