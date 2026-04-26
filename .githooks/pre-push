@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+# Git hooks inherit repo-scoped env vars that can break nested git commands.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR
+
+echo "pre-push: running make format-check"
+make format-check
+echo "pre-push: running make lint"
+make lint
+echo "pre-push: running make test"
+make test

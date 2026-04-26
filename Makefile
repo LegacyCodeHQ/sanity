@@ -1,4 +1,4 @@
-.PHONY: test test-update-golden test-coverage coverage coverage-html clean help build-dev release-check lint security housekeeping tools format install-web build-web test-web clean-web
+.PHONY: test test-update-golden test-coverage coverage coverage-html clean help build-dev release-check lint security housekeeping tools format format-check setup-hooks install-web build-web test-web clean-web
 
 # Version information (can be overridden via command line)
 # Try to get version from git tag, otherwise use "dev"
@@ -54,6 +54,19 @@ tools:
 # Format Go source files
 format:
 	gofmt -s -w $$(find . -name '*.go' -not -path './.git/*')
+
+# Activate the in-repo .githooks/ directory for this clone
+setup-hooks:
+	git config core.hooksPath .githooks
+
+# Verify tracked Go source files are gofmt-clean (used by pre-commit hook)
+format-check:
+	@diff=$$(gofmt -s -l $$(git ls-files '*.go')); \
+	if [ -n "$$diff" ]; then \
+		echo "gofmt -s would reformat the following files; run 'make format':"; \
+		echo "$$diff"; \
+		exit 1; \
+	fi
 
 # Run linters
 lint: tools
