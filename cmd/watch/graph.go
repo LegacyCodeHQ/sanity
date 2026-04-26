@@ -11,7 +11,7 @@ import (
 	"github.com/LegacyCodeHQ/clarity/vcs/git"
 )
 
-func buildDOTGraph(repoPath string, opts *watchOptions) (string, error) {
+func buildDOTGraph(repoPath string, opts *watchOptions, formatter formatters.Formatter) (string, error) {
 	filePaths, err := git.GetUncommittedFiles(repoPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to get uncommitted files: %w", err)
@@ -45,11 +45,6 @@ func buildDOTGraph(repoPath string, opts *watchOptions) (string, error) {
 	fileGraph, err := depgraph.NewFileDependencyGraph(graph, fileStats, contentReader)
 	if err != nil {
 		return "", fmt.Errorf("failed to build file graph metadata: %w", err)
-	}
-
-	formatter, err := formatters.NewFormatter("dot")
-	if err != nil {
-		return "", err
 	}
 
 	direction, ok := formatters.ParseDirection(opts.direction)

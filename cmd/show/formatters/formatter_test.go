@@ -8,8 +8,8 @@ func TestNewFormatter_DOT(t *testing.T) {
 		t.Fatalf("NewFormatter(dot) error = %v", err)
 	}
 
-	if _, ok := f.(dotFormatter); !ok {
-		t.Fatalf("NewFormatter(dot) returned %T, want formatters.dotFormatter", f)
+	if _, ok := f.(*dotFormatter); !ok {
+		t.Fatalf("NewFormatter(dot) returned %T, want *formatters.dotFormatter", f)
 	}
 }
 

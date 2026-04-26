@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LegacyCodeHQ/clarity/cmd/show/formatters"
 	"github.com/LegacyCodeHQ/clarity/depgraph/registry"
 	"github.com/LegacyCodeHQ/clarity/vcs/git"
 	"github.com/fsnotify/fsnotify"
@@ -30,7 +31,7 @@ var skippedDirs = map[string]bool{
 	".vscode":      true,
 }
 
-func watchAndRebuild(ctx context.Context, repoPath string, opts *watchOptions, b *broker) error {
+func watchAndRebuild(ctx context.Context, repoPath string, opts *watchOptions, b *broker, formatter formatters.Formatter) error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return fmt.Errorf("failed to create file watcher: %w", err)
@@ -103,10 +104,10 @@ func watchAndRebuild(ctx context.Context, repoPath string, opts *watchOptions, b
 			if headChanged {
 				b.archiveWorkingSet()
 			}
-			publishCurrentGraph(repoPath, opts, b)
+				publishCurrentGraph(repoPath, opts, b, formatter)
 
 		case <-debounceC:
-			publishCurrentGraph(repoPath, opts, b)
+			publishCurrentGraph(repoPath, opts, b, formatter)
 			debounceC = nil
 		}
 	}
@@ -124,8 +125,8 @@ func stopAndDrainTimer(timer *time.Timer) {
 	}
 }
 
-func publishCurrentGraph(repoPath string, opts *watchOptions, b *broker) {
-	dot, err := buildDOTGraph(repoPath, opts)
+func publishCurrentGraph(repoPath string, opts *watchOptions, b *broker, formatter formatters.Formatter) {
+	dot, err := buildDOTGraph(repoPath, opts, formatter)
 	if errors.Is(err, errNoUncommittedChanges) {
 		b.clearWorkingSet()
 		return

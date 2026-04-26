@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LegacyCodeHQ/clarity/cmd/show/formatters"
 	"github.com/LegacyCodeHQ/clarity/cmd/watch/protocol"
 
 	"github.com/fsnotify/fsnotify"
@@ -375,7 +376,9 @@ func TestBuildDOTGraph_ProducesOutput(t *testing.T) {
 	require.NoError(t, err)
 
 	opts := &watchOptions{}
-	dot, err := buildDOTGraph(dir, opts)
+	formatter, err := formatters.NewFormatter("dot")
+	require.NoError(t, err)
+	dot, err := buildDOTGraph(dir, opts, formatter)
 	require.NoError(t, err)
 
 	assert.Contains(t, dot, "digraph")
@@ -387,7 +390,9 @@ func TestBuildDOTGraph_NoUncommittedChanges(t *testing.T) {
 	initGitRepo(t, dir)
 
 	opts := &watchOptions{}
-	_, err := buildDOTGraph(dir, opts)
+	formatter, err := formatters.NewFormatter("dot")
+	require.NoError(t, err)
+	_, err = buildDOTGraph(dir, opts, formatter)
 	assert.True(t, errors.Is(err, errNoUncommittedChanges))
 }
 
@@ -401,7 +406,9 @@ func TestBuildDOTGraph_WithIncludeExt(t *testing.T) {
 	require.NoError(t, err)
 
 	opts := &watchOptions{includeExt: ".go"}
-	dot, err := buildDOTGraph(dir, opts)
+	formatter, err := formatters.NewFormatter("dot")
+	require.NoError(t, err)
+	dot, err := buildDOTGraph(dir, opts, formatter)
 	require.NoError(t, err)
 
 	assert.Contains(t, dot, "main.go")
@@ -418,7 +425,9 @@ func TestBuildDOTGraph_WithExcludeExt(t *testing.T) {
 	require.NoError(t, err)
 
 	opts := &watchOptions{excludeExt: ".py"}
-	dot, err := buildDOTGraph(dir, opts)
+	formatter, err := formatters.NewFormatter("dot")
+	require.NoError(t, err)
+	dot, err := buildDOTGraph(dir, opts, formatter)
 	require.NoError(t, err)
 
 	assert.Contains(t, dot, "main.go")
@@ -466,7 +475,9 @@ func TestBuildDOTGraph_IncludesFileStats(t *testing.T) {
 	require.NoError(t, err)
 
 	opts := &watchOptions{}
-	dot, err := buildDOTGraph(dir, opts)
+	formatter, err := formatters.NewFormatter("dot")
+	require.NoError(t, err)
+	dot, err := buildDOTGraph(dir, opts, formatter)
 	require.NoError(t, err)
 
 	assert.Contains(t, dot, "main.go")
@@ -480,7 +491,9 @@ func TestPublishCurrentGraph_NoUncommittedChangesClearsWorkingSnapshots(t *testi
 	ch := b.subscribe()
 	defer b.unsubscribe(ch)
 
-	publishCurrentGraph(dir, &watchOptions{}, b)
+	formatter, err := formatters.NewFormatter("dot")
+	require.NoError(t, err)
+	publishCurrentGraph(dir, &watchOptions{}, b, formatter)
 
 	select {
 	case got := <-ch:

@@ -6,7 +6,10 @@ import (
 	"github.com/LegacyCodeHQ/clarity/depgraph"
 )
 
-type dotFormatter struct{}
+type dotFormatter struct {
+	extensionColors   map[string]string
+	nextColorPaletteI int
+}
 
 type mermaidFormatter struct{}
 
@@ -28,7 +31,7 @@ func NewFormatter(format string) (Formatter, error) {
 
 	switch f {
 	case OutputFormatDOT:
-		return dotFormatter{}, nil
+		return &dotFormatter{}, nil
 	case OutputFormatMermaid:
 		return mermaidFormatter{}, nil
 	case endOfSupportedFormatsMarker:

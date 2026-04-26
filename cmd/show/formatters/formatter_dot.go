@@ -11,7 +11,7 @@ import (
 )
 
 // Format converts the dependency graph to Graphviz DOT format.
-func (f dotFormatter) Format(g depgraph.FileDependencyGraph, opts RenderOptions) (string, error) {
+func (f *dotFormatter) Format(g depgraph.FileDependencyGraph, opts RenderOptions) (string, error) {
 	adjacency, err := depgraph.AdjacencyList(g.Graph)
 	if err != nil {
 		return "", err
@@ -71,7 +71,7 @@ func (f dotFormatter) Format(g depgraph.FileDependencyGraph, opts RenderOptions)
 	sort.Strings(filePaths)
 	nodeNames := BuildNodeNames(filePaths)
 
-	extensionColors := getExtensionColors(filePaths)
+	extensionColors := f.assignExtensionColors(filePaths)
 
 	// Count files by extension to find the majority extension
 	extensionCounts := make(map[string]int)
@@ -240,9 +240,44 @@ func (f dotFormatter) Format(g depgraph.FileDependencyGraph, opts RenderOptions)
 }
 
 // GenerateURL creates a GraphvizOnline URL with the DOT graph embedded.
-func (f dotFormatter) GenerateURL(output string) (string, bool) {
+func (f *dotFormatter) GenerateURL(output string) (string, bool) {
 	encoded := url.PathEscape(output)
 	return fmt.Sprintf("https://dreampuf.github.io/GraphvizOnline/?engine=dot#%s", encoded), true
+}
+
+func (f *dotFormatter) assignExtensionColors(filePaths []string) map[string]string {
+	if f.extensionColors == nil {
+		f.extensionColors = make(map[string]string)
+	}
+
+	uniqueExtensions := make(map[string]bool)
+	for _, filePath := range filePaths {
+		ext := filepath.Ext(filePath)
+		if ext != "" {
+			uniqueExtensions[ext] = true
+		}
+	}
+
+	sortedExtensions := make([]string, 0, len(uniqueExtensions))
+	for ext := range uniqueExtensions {
+		sortedExtensions = append(sortedExtensions, ext)
+	}
+	sort.Strings(sortedExtensions)
+
+	for _, ext := range sortedExtensions {
+		if _, exists := f.extensionColors[ext]; exists {
+			continue
+		}
+		color := extensionColorPalette[f.nextColorPaletteI%len(extensionColorPalette)]
+		f.extensionColors[ext] = color
+		f.nextColorPaletteI++
+	}
+
+	currentExtensions := make(map[string]string, len(sortedExtensions))
+	for _, ext := range sortedExtensions {
+		currentExtensions[ext] = f.extensionColors[ext]
+	}
+	return currentExtensions
 }
 
 func dotNodeKey(path, basePath string) string {

@@ -1,6 +1,8 @@
 package formatters
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/LegacyCodeHQ/clarity/depgraph"
@@ -344,4 +346,65 @@ func TestDependencyGraph_ToDOT_DuplicateBaseNamesStayDistinct(t *testing.T) {
 
 	g := testhelpers.DotGoldie(t)
 	g.Assert(t, t.Name(), []byte(output))
+}
+
+func TestDependencyGraph_ToDOT_ExtensionColorsRemainStableAcrossSequentialRenders(t *testing.T) {
+	formatter := dotFormatter{}
+
+	firstGraph := testFileGraph(t, map[string][]string{
+		"/project/main.go":  {},
+		"/project/app.py":   {},
+		"/project/util.py":  {},
+		"/project/extra.py": {},
+	}, nil)
+
+	firstOutput, err := formatter.Format(firstGraph, RenderOptions{})
+	require.NoError(t, err)
+	firstGoColor, ok := findFillColorForLabel(firstOutput, "main.go")
+	require.True(t, ok, "expected main.go to have a fill color in first render")
+	require.NotEqual(t, "white", firstGoColor, "setup error: main.go should not be majority extension in first render")
+
+	secondGraph := testFileGraph(t, map[string][]string{
+		"/project/main.go":  {},
+		"/project/app.py":   {},
+		"/project/util.py":  {},
+		"/project/extra.py": {},
+		"/project/engine.c": {},
+	}, nil)
+
+	secondOutput, err := formatter.Format(secondGraph, RenderOptions{})
+	require.NoError(t, err)
+	secondGoColor, ok := findFillColorForLabel(secondOutput, "main.go")
+	require.True(t, ok, "expected main.go to have a fill color in second render")
+
+	require.Equal(
+		t,
+		firstGoColor,
+		secondGoColor,
+		"expected .go extension color to remain stable across sequential renders when extension set changes",
+	)
+}
+
+func findFillColorForLabel(dotOutput, label string) (string, bool) {
+	needle := fmt.Sprintf("label=%q", label)
+	for _, line := range strings.Split(dotOutput, "\n") {
+		if !strings.Contains(line, needle) {
+			continue
+		}
+
+		idx := strings.Index(line, "fillcolor=")
+		if idx == -1 {
+			return "", false
+		}
+
+		colorPart := line[idx+len("fillcolor="):]
+		if comma := strings.IndexByte(colorPart, ','); comma >= 0 {
+			colorPart = colorPart[:comma]
+		}
+		if bracket := strings.IndexByte(colorPart, ']'); bracket >= 0 {
+			colorPart = colorPart[:bracket]
+		}
+		return strings.TrimSpace(colorPart), true
+	}
+	return "", false
 }

@@ -87,6 +87,10 @@ func runWatch(cmd *cobra.Command, opts *watchOptions) error {
 
 	b := newBroker()
 	srv := newServer(b, actualPort, repoPath)
+	formatter, err := formatters.NewFormatter("dot")
+	if err != nil {
+		return err
+	}
 
 	go func() {
 		if serveErr := srv.Serve(ln); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
@@ -94,7 +98,7 @@ func runWatch(cmd *cobra.Command, opts *watchOptions) error {
 		}
 	}()
 
-	dot, err := buildDOTGraph(repoPath, opts)
+	dot, err := buildDOTGraph(repoPath, opts, formatter)
 	if errors.Is(err, errNoUncommittedChanges) {
 		b.clearWorkingSet()
 		fmt.Fprintf(cmd.OutOrStdout(), "No uncommitted changes yet, waiting for file changes...\n")
@@ -112,7 +116,7 @@ func runWatch(cmd *cobra.Command, opts *watchOptions) error {
 	fmt.Fprintf(cmd.OutOrStdout(), "Serving at http://localhost:%d\n", actualPort)
 	fmt.Fprintf(cmd.OutOrStdout(), "Press Ctrl+C to stop\n")
 
-	err = watchAndRebuild(ctx, repoPath, opts, b)
+	err = watchAndRebuild(ctx, repoPath, opts, b, formatter)
 
 	srv.Close()
 	return err

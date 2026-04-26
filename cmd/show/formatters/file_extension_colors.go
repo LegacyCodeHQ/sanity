@@ -5,13 +5,13 @@ import (
 	"sort"
 )
 
-func getExtensionColors(fileNames []string) map[string]string {
-	availableColors := []string{
-		"lightblue", "lightyellow", "mistyrose", "lightsalmon",
-		"lightpink", "lavender", "peachpuff", "plum", "powderblue", "khaki",
-		"palegoldenrod", "thistle",
-	}
+var extensionColorPalette = []string{
+	"lightblue", "lightyellow", "mistyrose", "lightsalmon",
+	"lightpink", "lavender", "peachpuff", "plum", "powderblue", "khaki",
+	"palegoldenrod", "thistle",
+}
 
+func getExtensionColors(fileNames []string) map[string]string {
 	uniqueExtensions := make(map[string]bool)
 	for _, fileName := range fileNames {
 		ext := filepath.Ext(fileName)
@@ -28,7 +28,7 @@ func getExtensionColors(fileNames []string) map[string]string {
 
 	extensionColors := make(map[string]string)
 	for i, ext := range sortedExtensions {
-		color := availableColors[i%len(availableColors)]
+		color := extensionColorPalette[i%len(extensionColorPalette)]
 		extensionColors[ext] = color
 	}
 
