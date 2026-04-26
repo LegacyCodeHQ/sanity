@@ -217,13 +217,13 @@ var kotlinParserPool = sync.Pool{
 }
 
 var (
-	kotlinQueryOnce              sync.Once
-	kotlinCompiledImportQuery    *sitter.Query
-	kotlinCompiledFallbackQueries []*sitter.Query
-	kotlinCompiledPackageQuery   *sitter.Query
-	kotlinCompiledTypeIdQuery    *sitter.Query
+	kotlinQueryOnce                sync.Once
+	kotlinCompiledImportQuery      *sitter.Query
+	kotlinCompiledFallbackQueries  []*sitter.Query
+	kotlinCompiledPackageQuery     *sitter.Query
+	kotlinCompiledTypeIdQuery      *sitter.Query
 	kotlinCompiledConstructorQuery *sitter.Query
-	kotlinCompiledSymbolQuery    *sitter.Query
+	kotlinCompiledSymbolQuery      *sitter.Query
 )
 
 func ensureKotlinQueries() {
@@ -269,69 +269,6 @@ func ensureKotlinQueries() {
 
 // runQueryKotlinImports executes a pre-compiled tree-sitter query and extracts import paths
 func runQueryKotlinImports(rootNode *sitter.Node, sourceCode []byte, query *sitter.Query, pattern string) ([]KotlinImport, error) {
-	cursor := sitter.NewQueryCursor()
-	defer cursor.Close()
-
-	cursor.Exec(query, rootNode)
-
-	imports := []KotlinImport{}
-	projectPackages := make(map[string]bool) // Will be populated later during graph building
-
-	for {
-		match, ok := cursor.NextMatch()
-		if !ok {
-			break
-		}
-
-		match = cursor.FilterPredicates(match, sourceCode)
-
-		for _, capture := range match.Captures {
-			content := capture.Node.Content(sourceCode)
-			importPath := content
-
-			// If this is a full import capture, extract the import path manually
-			if strings.Contains(pattern, "@import.full") {
-				importPath = extractImportFromFullText(content)
-			}
-
-			// Check if this is a wildcard import by looking at the parent import_header node
-			isWildcard := false
-			parent := capture.Node.Parent()
-			if parent != nil && parent.Type() == "import_header" {
-				// Check if any child is a wildcard_import node
-				for i := 0; i < int(parent.ChildCount()); i++ {
-					child := parent.Child(i)
-					if child.Type() == "wildcard_import" {
-						isWildcard = true
-						break
-					}
-				}
-			}
-
-			// Clean the import path (remove "import" keyword if present)
-			importPath = strings.TrimPrefix(importPath, "import")
-			importPath = strings.TrimSpace(importPath)
-
-			if importPath != "" {
-				// For now, classify with empty project packages (will be reclassified during graph building)
-				imports = append(imports, classifyKotlinImport(importPath, isWildcard, projectPackages))
-			}
-		}
-	}
-
-	return imports, nil
-}
-
-// queryKotlinImports executes a tree-sitter query and extracts import paths
-func queryKotlinImports(rootNode *sitter.Node, sourceCode []byte, pattern string) ([]KotlinImport, error) {
-	lang := kotlin.GetLanguage()
-
-	query, err := sitter.NewQuery([]byte(pattern), lang)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create query: %w", err)
-	}
-	defer query.Close()
-
 	cursor := sitter.NewQueryCursor()
 	defer cursor.Close()
 
@@ -432,36 +369,6 @@ func runQueryPackageName(rootNode *sitter.Node, sourceCode []byte) (string, erro
 	defer cursor.Close()
 
 	cursor.Exec(kotlinCompiledPackageQuery, rootNode)
-
-	match, ok := cursor.NextMatch()
-	if !ok {
-		return "", fmt.Errorf("no package declaration found")
-	}
-
-	match = cursor.FilterPredicates(match, sourceCode)
-
-	if len(match.Captures) > 0 {
-		pkg := match.Captures[0].Node.Content(sourceCode)
-		return strings.TrimSpace(pkg), nil
-	}
-
-	return "", fmt.Errorf("no package name captured")
-}
-
-// queryPackageName executes a tree-sitter query to extract package name
-func queryPackageName(rootNode *sitter.Node, sourceCode []byte) (string, error) {
-	lang := kotlin.GetLanguage()
-
-	query, err := sitter.NewQuery([]byte(kotlinPackageQueryPattern), lang)
-	if err != nil {
-		return "", fmt.Errorf("failed to create query: %w", err)
-	}
-	defer query.Close()
-
-	cursor := sitter.NewQueryCursor()
-	defer cursor.Close()
-
-	cursor.Exec(query, rootNode)
 
 	match, ok := cursor.NextMatch()
 	if !ok {

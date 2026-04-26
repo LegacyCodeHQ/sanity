@@ -608,7 +608,7 @@ func parseCargoManifest(cargoTomlPath string) (string, []string, error) {
 	scanner := bufio.NewScanner(strings.NewReader(string(content)))
 	section := ""
 	crateName := ""
-	deps := make([]string, 0)
+	deps := []string{}
 
 	for scanner.Scan() {
 		line := trimTomlComment(scanner.Text())

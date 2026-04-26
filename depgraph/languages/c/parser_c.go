@@ -117,9 +117,6 @@ func parseCIncludesFast(src []byte) ([]Include, bool) {
 					i++
 					break
 				}
-				if src[i] == '\n' {
-					atLineStart = true
-				}
 				i++
 			}
 			atLineStart = false

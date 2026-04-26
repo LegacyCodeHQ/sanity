@@ -478,7 +478,7 @@ type rustPathDependencyEntry struct {
 func parseRustPathDependencyEntries(content string) []rustPathDependencyEntry {
 	scanner := bufio.NewScanner(strings.NewReader(content))
 	section := ""
-	entries := make([]rustPathDependencyEntry, 0)
+	entries := []rustPathDependencyEntry{}
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())

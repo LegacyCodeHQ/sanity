@@ -381,8 +381,7 @@ func TestDependencyGraph_ToDOT_ExtensionColorsRemainStableAcrossSequentialRender
 		t,
 		firstGoColor,
 		secondGoColor,
-		"expected .go extension color to remain stable across sequential renders when extension set changes",
-	)
+		"expected .go extension color to remain stable across sequential renders when extension set changes")
 }
 
 func findFillColorForLabel(dotOutput, label string) (string, bool) {

@@ -156,42 +156,6 @@ func runQueryImports(rootNode *sitter.Node, sourceCode []byte, query *sitter.Que
 	return imports, nil
 }
 
-// queryImports executes a tree-sitter query and extracts import URIs
-func queryImports(rootNode *sitter.Node, sourceCode []byte, pattern string) ([]Import, error) {
-	lang := dart.GetLanguage()
-
-	query, err := sitter.NewQuery([]byte(pattern), lang)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create query: %w", err)
-	}
-	defer query.Close()
-
-	cursor := sitter.NewQueryCursor()
-	defer cursor.Close()
-
-	cursor.Exec(query, rootNode)
-
-	var imports []Import
-
-	for {
-		match, ok := cursor.NextMatch()
-		if !ok {
-			break
-		}
-
-		match = cursor.FilterPredicates(match, sourceCode)
-
-		for _, capture := range match.Captures {
-			content := capture.Node.Content(sourceCode)
-			// Remove quotes from string literal
-			importURI := cleanImportURI(content)
-			imports = append(imports, classifyImport(importURI))
-		}
-	}
-
-	return imports, nil
-}
-
 // cleanImportURI removes quotes and trims whitespace from import URIs
 func cleanImportURI(raw string) string {
 	// Remove single or double quotes
